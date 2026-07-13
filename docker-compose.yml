@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: osafi_ativos_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: osafi
+      POSTGRES_PASSWORD: osafi_dev_password
+      POSTGRES_DB: osafi_ativos
+    ports:
+      - "5433:5432"
+    volumes:
+      - osafi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U osafi -d osafi_ativos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  osafi_pgdata:
