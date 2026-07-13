@@ -3,13 +3,21 @@ import { Pool, type PoolClient, type QueryResultRow } from "pg";
 // Singleton do pool para evitar múltiplas conexões durante o hot-reload do Next.
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
 
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgres://osafi:osafi_dev_password@localhost:5433/osafi_ativos";
+
+// Habilita SSL automaticamente para bancos gerenciados (ex.: Supabase),
+// mantendo conexão sem SSL para o Postgres local de desenvolvimento.
+const isLocal =
+  connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
+
 export const pool =
   globalForPg.pgPool ??
   new Pool({
-    connectionString:
-      process.env.DATABASE_URL ||
-      "postgres://osafi:osafi_dev_password@localhost:5433/osafi_ativos",
+    connectionString,
     max: 10,
+    ssl: isLocal ? false : { rejectUnauthorized: false },
   });
 
 if (process.env.NODE_ENV !== "production") {
