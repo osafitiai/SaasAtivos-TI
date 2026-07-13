@@ -16,6 +16,7 @@
     "setup": "docker compose up -d && tsx scripts/wait-db.ts && tsx scripts/migrate.ts && tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.110.3",
     "bcryptjs": "^2.4.3",
     "date-fns": "^3.6.0",
     "dotenv": "^16.4.7",

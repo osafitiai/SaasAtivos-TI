@@ -22,7 +22,7 @@ export async function POST(request: Request) {
   if (err) return NextResponse.json({ error: err }, { status: 400 });
 
   const bytes = Buffer.from(await file.arrayBuffer());
-  const storagePath = await storeFile(user.tenant_id!, file.name, bytes);
+  const storagePath = await storeFile(user.tenant_id!, file.name, bytes, file.type);
 
   const { rows } = await pool.query<{ id: string }>(
     `insert into documents

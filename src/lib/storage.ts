@@ -1,9 +1,7 @@
 import "server-only";
-import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { extname } from "node:path";
 import { randomUUID } from "node:crypto";
-
-const STORAGE_DIR = process.env.STORAGE_DIR || "./storage";
+import { getSupabaseAdmin, DOCUMENTS_BUCKET } from "./supabaseAdmin";
 
 const ALLOWED_EXT = new Set([
   ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp",
@@ -18,30 +16,39 @@ export function validateUpload(fileName: string, size: number): string | null {
   return null;
 }
 
+/** Envia o arquivo ao Supabase Storage e retorna o caminho (key) dentro do bucket. */
 export async function storeFile(
   tenantId: string,
   fileName: string,
-  bytes: Buffer
+  bytes: Buffer,
+  contentType?: string
 ): Promise<string> {
-  const dir = join(STORAGE_DIR, tenantId);
-  await mkdir(dir, { recursive: true });
   const ext = extname(fileName);
-  const key = `${randomUUID()}${ext}`;
-  const fullPath = join(dir, key);
-  await writeFile(fullPath, bytes);
-  return join(tenantId, key).replace(/\\/g, "/");
+  const key = `${tenantId}/${randomUUID()}${ext}`;
+  const supabase = getSupabaseAdmin();
+
+  const { error } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(key, bytes, {
+      contentType: contentType || "application/octet-stream",
+      upsert: false,
+    });
+
+  if (error) throw new Error("Falha ao enviar arquivo: " + error.message);
+  return key;
 }
 
 export async function loadFile(storagePath: string): Promise<Buffer> {
-  const safe = storagePath.replace(/\.\./g, "");
-  return readFile(join(STORAGE_DIR, safe));
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage
+    .from(DOCUMENTS_BUCKET)
+    .download(storagePath);
+
+  if (error || !data) throw new Error("Arquivo não encontrado no armazenamento.");
+  return Buffer.from(await data.arrayBuffer());
 }
 
 export async function deleteFile(storagePath: string): Promise<void> {
-  const safe = storagePath.replace(/\.\./g, "");
-  try {
-    await unlink(join(STORAGE_DIR, safe));
-  } catch {
-    // arquivo já removido
-  }
+  const supabase = getSupabaseAdmin();
+  await supabase.storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
 }
