@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
-import { updateAssetResponsible } from "@/app/(app)/ativos/[id]/updateResponsible";
+import { updateAssetResponsible } from "@/app/(app)/ativos/actions";
 import type { FieldOption } from "./CrudManager";
 
 export function UpdateAssetResponsibleModal({
