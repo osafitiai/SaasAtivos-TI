@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Tabs } from "@/components/Tabs";
 import { AssetStatusBadge, ReplacementBadge, MaintenanceStatusBadge, Badge } from "@/components/Badge";
 import { MovementModal } from "@/components/MovementModal";
+import { UpdateAssetResponsibleModal } from "@/components/UpdateAssetResponsibleModal";
 import { DocumentsPanel, type Doc } from "@/components/DocumentsPanel";
 import { formatBRL, formatDate, formatDateTime } from "@/lib/format";
 import type { Asset, AssetMovement, Maintenance, AuditLog } from "@/lib/types";
@@ -152,23 +153,36 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
   );
 
   const responsavel = (
-    <div className="card p-5">
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
-        <Info
-          label="Responsável atual"
-          value={
-            asset.current_employee_id ? (
-              <Link href={`/colaboradores/${asset.current_employee_id}`} className="text-brand-600 hover:underline">
-                {asset.employee_name}
-              </Link>
-            ) : "Sem responsável"
-          }
-        />
-        <Info label="Localização" value={asset.full_path || asset.location_name} />
-        <Info label="Departamento" value={asset.department_name} />
-        <Info label="Empresa" value={asset.company_name} />
-        <Info label="Fornecedor" value={asset.supplier_name} />
-      </dl>
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        {canEdit && (
+          <UpdateAssetResponsibleModal
+            assetId={asset.id}
+            currentEmployeeId={asset.current_employee_id}
+            currentLocationId={asset.location_id}
+            employees={employees}
+            locations={locations}
+          />
+        )}
+      </div>
+      <div className="card p-5">
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+          <Info
+            label="Responsável atual"
+            value={
+              asset.current_employee_id ? (
+                <Link href={`/colaboradores/${asset.current_employee_id}`} className="text-brand-600 hover:underline">
+                  {asset.employee_name}
+                </Link>
+              ) : "Sem responsável"
+            }
+          />
+          <Info label="Localização" value={asset.full_path || asset.location_name} />
+          <Info label="Departamento" value={asset.department_name} />
+          <Info label="Empresa" value={asset.company_name} />
+          <Info label="Fornecedor" value={asset.supplier_name} />
+        </dl>
+      </div>
     </div>
   );
 
