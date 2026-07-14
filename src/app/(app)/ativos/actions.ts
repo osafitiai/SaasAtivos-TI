@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { pool, queryOne } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/rbac";
 import { recordAudit } from "@/lib/audit";
 import { computeReplacementDate, classifyReplacement } from "@/lib/replacement";
 
@@ -123,11 +124,20 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
 }
 
 export async function deleteAsset(formData: FormData): Promise<{ error?: string }> {
+  return deleteAssetInternal(String(formData.get("id")));
+}
+
+/** Exclui (baixa lógica) um ativo pelo id. Usado pelo botão de exclusão na lista. */
+export async function deleteAssetById(id: string): Promise<void> {
+  await deleteAssetInternal(id);
+}
+
+async function deleteAssetInternal(id: string): Promise<{ error?: string }> {
   const user = await getSession();
   if (!user) return { error: "Não autenticado." };
-  const id = String(formData.get("id"));
+  if (!can(user, "assets.delete")) return { error: "Sem permissão para excluir ativos." };
 
-  const before = await queryOne(
+  const before = await queryOne<{ status: string }>(
     "select * from assets where id = $1 and tenant_id = $2 and deleted_at is null",
     [id, user.tenant_id]
   );

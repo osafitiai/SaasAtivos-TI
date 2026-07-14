@@ -8,6 +8,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { AssetStatusBadge, ReplacementBadge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
 import { MovementModal } from "@/components/MovementModal";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { deleteAssetById } from "./actions";
 import { formatBRL, formatDate } from "@/lib/format";
 import type { Asset } from "@/lib/types";
 
@@ -27,6 +29,7 @@ export default async function AtivosPage({
   const user = await requireSession();
   const showMoney = canSeeFinancials(user);
   const canEdit = can(user, "assets.edit");
+  const canDelete = can(user, "assets.delete");
 
   const page = Math.max(1, Number(sp.page || 1));
   const q = (sp.q || "").trim();
@@ -192,6 +195,15 @@ export default async function AtivosPage({
                         />
                       )}
                       <Link href={`/ativos/${a.id}`} className="btn-ghost px-2 py-1 text-xs">Ver</Link>
+                      {canDelete && (
+                        <ConfirmButton
+                          action={deleteAssetById.bind(null, a.id)}
+                          className="btn-ghost px-2 py-1 text-xs text-red-600"
+                          message={`Excluir o ativo "${a.name}"? Ele será removido da listagem (baixa lógica) e o histórico será preservado.`}
+                        >
+                          Excluir
+                        </ConfirmButton>
+                      )}
                     </div>
                   </td>
                 </tr>
