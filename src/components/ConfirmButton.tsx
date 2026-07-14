@@ -26,11 +26,11 @@ export function ConfirmButton({
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center whitespace-normal bg-black/40 p-4">
           <div className="card w-full max-w-sm p-5">
-            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+            <h3 className="text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
               Confirmar ação
             </h3>
-            <p className="mt-2 break-words text-sm text-slate-500 dark:text-slate-400">{message}</p>
-            <div className="mt-4 flex justify-end gap-2">
+            <p className="mt-2 break-words text-center text-sm text-slate-500 dark:text-slate-400">{message}</p>
+            <div className="mt-4 flex justify-center gap-2">
               <button className="btn-secondary" onClick={() => setOpen(false)} disabled={pending}>
                 Cancelar
               </button>
