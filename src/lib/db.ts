@@ -1,6 +1,7 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-// Singleton do pool para evitar múltiplas conexões durante o hot-reload do Next.
+// Singleton do pool, reutilizado entre invocações na mesma instância (inclusive
+// serverless na Vercel) e durante o hot-reload do Next em desenvolvimento.
 const globalForPg = globalThis as unknown as { pgPool?: Pool };
 
 const connectionString =
@@ -12,17 +13,31 @@ const connectionString =
 const isLocal =
   connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
 
-export const pool =
-  globalForPg.pgPool ??
-  new Pool({
+function createPool(): Pool {
+  const p = new Pool({
     connectionString,
-    max: 10,
     ssl: isLocal ? false : { rejectUnauthorized: false },
+    // Em serverless cada instância mantém seu próprio pool; um pool pequeno
+    // evita esgotar as conexões do pooler do Supabase.
+    max: isLocal ? 10 : 4,
+    idleTimeoutMillis: 10_000,
+    connectionTimeoutMillis: 15_000,
+    allowExitOnIdle: true,
+    keepAlive: true,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPg.pgPool = pool;
+  // ESSENCIAL: sem este handler, um erro em conexão ociosa (o pooler do Supabase
+  // fecha conexões inativas) vira "unhandled error" e derruba o processo,
+  // causando "server-side exception" no request seguinte.
+  p.on("error", (err) => {
+    console.error("[pg pool] erro em conexão ociosa (ignorado):", err.message);
+  });
+
+  return p;
 }
+
+export const pool = globalForPg.pgPool ?? createPool();
+globalForPg.pgPool = pool;
 
 export async function query<T extends QueryResultRow = QueryResultRow>(
   text: string,
@@ -50,7 +65,11 @@ export async function transaction<T>(
     await client.query("commit");
     return result;
   } catch (err) {
-    await client.query("rollback");
+    try {
+      await client.query("rollback");
+    } catch {
+      // conexão pode já estar inválida; ignora para não mascarar o erro original
+    }
     throw err;
   } finally {
     client.release();
