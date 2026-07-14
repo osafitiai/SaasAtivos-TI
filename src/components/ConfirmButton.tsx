@@ -24,7 +24,7 @@ export function ConfirmButton({
         {children}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center whitespace-normal bg-black/40 p-4">
           <div className="card w-full max-w-sm p-5">
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               Confirmar ação
