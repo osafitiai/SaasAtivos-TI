@@ -199,7 +199,7 @@ export default async function AtivosPage({
                         <ConfirmButton
                           action={deleteAssetById.bind(null, a.id)}
                           className="btn-ghost px-2 py-1 text-xs text-red-600"
-                          message={`Excluir o ativo "${a.name}"? Ele será removido da listagem (baixa lógica) e o histórico será preservado.`}
+                          message={`Deseja excluir "${a.name}"? O ativo sai da lista, mas o histórico é preservado.`}
                         >
                           Excluir
                         </ConfirmButton>

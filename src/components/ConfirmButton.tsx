@@ -24,12 +24,12 @@ export function ConfirmButton({
         {children}
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
           <div className="card w-full max-w-sm p-5">
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               Confirmar ação
             </h3>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{message}</p>
+            <p className="mt-2 break-words text-sm text-slate-500 dark:text-slate-400">{message}</p>
             <div className="mt-4 flex justify-end gap-2">
               <button className="btn-secondary" onClick={() => setOpen(false)} disabled={pending}>
                 Cancelar
