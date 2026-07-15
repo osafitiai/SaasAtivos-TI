@@ -89,18 +89,62 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
 
   const invoiceDocs = docs.filter((d) => d.document_type === "nota_fiscal");
 
+  const catLower = (asset.category_name || "").toLowerCase();
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado");
+  const isHeadset = catLower.includes("headset");
+
   const resumo = (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="card p-5 lg:col-span-2">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           <Info label="Nome" value={asset.name} />
           <Info label="Categoria" value={`${asset.category_icon ?? ""} ${asset.category_name ?? ""}`} />
-          <Info label="Patrimônio" value={asset.asset_tag} />
-          <Info label="Número de série" value={asset.serial_number} />
-          <Info label="Código interno" value={asset.internal_code} />
-          <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
-          <Info label="Fabricante" value={asset.manufacturer} />
-          <Info label="Cor" value={asset.color} />
+
+          {isNotebook && (
+            <>
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Ano do produto" value={tech.ano_produto} />
+            </>
+          )}
+
+          {isMonitor && (
+            <>
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Tamanho (polegadas)" value={tech.tamanho_polegadas} />
+            </>
+          )}
+
+          {isKit && (
+            <>
+              <Info label="Número de série do teclado" value={tech.numero_serie_teclado} />
+              <Info label="Número de série do mouse" value={tech.numero_serie_mouse} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+            </>
+          )}
+
+          {isHeadset && (
+            <>
+              <Info label="Número de série do headset" value={tech.numero_serie_headset} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+            </>
+          )}
+
+          {!isNotebook && !isMonitor && !isKit && !isHeadset && (
+            <>
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+            </>
+          )}
+
           <Info label="Condição física" value={asset.physical_condition} />
           <Info label="Status" value={<AssetStatusBadge status={asset.status} />} />
           <Info label="Descrição" value={asset.description} span />
