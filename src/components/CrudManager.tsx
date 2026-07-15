@@ -220,6 +220,14 @@ export function CrudManager({
                   ))}
                   {canEdit && (
                     <td className="table-td text-right">
+                      {columns.find((c) => c.linkPrefix) && (
+                        <Link
+                          href={`${columns.find((c) => c.linkPrefix)!.linkPrefix}${row.id}`}
+                          className="btn-ghost px-2 py-1 text-xs font-semibold text-brand-600 mr-2"
+                        >
+                          Ver
+                        </Link>
+                      )}
                       <button className="btn-ghost px-2 py-1" onClick={() => openEdit(row)}>
                         ✏️
                       </button>
