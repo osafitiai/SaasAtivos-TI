@@ -87,6 +87,8 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
   const costRatio = acqValue > 0 ? (maintTotal / acqValue) * 100 : 0;
   const tech = (asset.technical_data ?? {}) as Record<string, string>;
 
+  const invoiceDocs = docs.filter((d) => d.document_type === "nota_fiscal");
+
   const resumo = (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="card p-5 lg:col-span-2">
@@ -103,6 +105,26 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
           <Info label="Status" value={<AssetStatusBadge status={asset.status} />} />
           <Info label="Descrição" value={asset.description} span />
         </dl>
+
+        {invoiceDocs.length > 0 && (
+          <div className="mt-6 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Notas Fiscais de Compra</h3>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {invoiceDocs.map((d) => (
+                <li key={d.id} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-slate-600 dark:text-slate-300">📎 {d.file_name}</span>
+                  <a
+                    href={`/api/documents/${d.id}`}
+                    download
+                    className="btn-ghost px-2 py-1 text-xs font-semibold text-brand-600"
+                  >
+                    ⬇ Baixar NF
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="space-y-4">
         <div className="card p-5">

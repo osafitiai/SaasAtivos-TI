@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import type { PoolClient } from "pg";
 import { getSession } from "@/lib/auth";
-import { transaction } from "@/lib/db";
+import { pool, transaction } from "@/lib/db";
 import { recordAudit } from "@/lib/audit";
-import { computeReplacementDate, classifyReplacement } from "@/lib/replacement";
+import { classifyReplacement, computeReplacementDate } from "@/lib/replacement";
 
 function norm(s: string): string {
   return s
@@ -19,7 +19,7 @@ function pick(row: Record<string, unknown>, candidates: string[]): string | null
   const keys = Object.keys(row);
   for (const cand of candidates) {
     const nc = norm(cand);
-    const found = keys.find((k) => norm(k).includes(nc));
+    const found = keys.find((k) => norm(k) === nc || norm(k).includes(nc));
     if (found && row[found] != null && String(row[found]).trim() !== "") {
       return String(row[found]).trim();
     }
@@ -29,7 +29,6 @@ function pick(row: Record<string, unknown>, candidates: string[]): string | null
 
 function parseDate(v: string | null): string | null {
   if (!v) return null;
-  // Excel serial number
   if (/^\d+(\.\d+)?$/.test(v)) {
     const serial = Number(v);
     if (serial > 30000 && serial < 60000) {
@@ -53,11 +52,10 @@ function parseMoney(v: string | null): number | null {
   return Number.isNaN(n) ? null : n;
 }
 
-interface Summary {
-  employees: { created: number; skipped: number };
-  assets: { created: number; skipped: number; duplicates: string[] };
-  maintenances: { created: number; skipped: number };
-  errors: string[];
+interface ImportError {
+  row: number;
+  column: string;
+  message: string;
 }
 
 export async function POST(request: Request) {
@@ -67,6 +65,8 @@ export async function POST(request: Request) {
   const form = await request.formData();
   const file = form.get("file") as File | null;
   const commit = String(form.get("commit") || "") === "true";
+  const importValidOnly = String(form.get("import_valid_only") || "") === "true";
+
   if (!file) return NextResponse.json({ error: "Arquivo não enviado." }, { status: 400 });
 
   let wb: XLSX.WorkBook;
@@ -76,310 +76,366 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Arquivo XLSX inválido." }, { status: 400 });
   }
 
-  const summary: Summary = {
-    employees: { created: 0, skipped: 0 },
-    assets: { created: 0, skipped: 0, duplicates: [] },
-    maintenances: { created: 0, skipped: 0 },
-    errors: [],
-  };
-
-  function sheet(nameIncludes: string): Record<string, unknown>[] {
-    const name = wb.SheetNames.find((n) => norm(n).includes(norm(nameIncludes)));
-    if (!name) {
-      if (nameIncludes === "ativo" && wb.SheetNames.length > 0) {
-        return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
-      }
-      return [];
-    }
-    return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
+  const sheetName = wb.SheetNames.find((n) => norm(n).includes("importa")) || wb.SheetNames[0];
+  if (!sheetName) {
+    return NextResponse.json({ error: "Nenhuma aba encontrada na planilha." }, { status: 400 });
   }
 
-  try {
-    await transaction(async (client: PoolClient) => {
-      const t = user.tenant_id;
+  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[sheetName], { defval: null });
+  const t = user.tenant_id;
 
-      // Cache de departamentos, categorias, localizações, colaboradores, empresas
-      const deptCache = new Map<string, string>();
-      const catCache = new Map<string, string>();
-      const locCache = new Map<string, string>();
-      const empCache = new Map<string, string>();
-      const companyCache = new Map<string, string>();
+  // Carregar caches do banco de dados para evitar queries repetitivas em loops grandes
+  const [categoriesDb, locationsDb, employeesDb] = await Promise.all([
+    pool.query<{ id: string; name: string }>("select id, name from asset_categories where tenant_id = $1", [t]),
+    pool.query<{ id: string; name: string }>("select id, name from locations where tenant_id = $1", [t]),
+    pool.query<{ id: string; full_name: string; email: string | null }>(
+      "select id, full_name, email from employees where tenant_id = $1 and status not in ('Desligado', 'Inativo')",
+      [t]
+    ),
+  ]);
 
-      async function ensureDept(name: string | null): Promise<string | null> {
-        if (!name) return null;
-        const key = norm(name);
-        if (deptCache.has(key)) return deptCache.get(key)!;
-        const ex = await client.query<{ id: string }>(
-          "select id from departments where tenant_id=$1 and lower(name)=lower($2) limit 1",
-          [t, name]
-        );
-        let id = ex.rows[0]?.id;
-        if (!id) {
-          const ins = await client.query<{ id: string }>(
-            "insert into departments (tenant_id, name, status) values ($1,$2,'active') returning id",
-            [t, name]
-          );
-          id = ins.rows[0].id;
-        }
-        deptCache.set(key, id);
-        return id;
-      }
-      async function ensureCat(name: string | null): Promise<string | null> {
-        const cname = name || "Outros";
-        const key = norm(cname);
-        if (catCache.has(key)) return catCache.get(key)!;
-        const ex = await client.query<{ id: string }>(
-          "select id from asset_categories where tenant_id=$1 and lower(name)=lower($2) limit 1",
-          [t, cname]
-        );
-        let id = ex.rows[0]?.id;
-        if (!id) {
-          const ins = await client.query<{ id: string }>(
-            "insert into asset_categories (tenant_id, name, status) values ($1,$2,'active') returning id",
-            [t, cname]
-          );
-          id = ins.rows[0].id;
-        }
-        catCache.set(key, id);
-        return id;
-      }
-      async function ensureLoc(name: string | null): Promise<string | null> {
-        if (!name) return null;
-        const key = norm(name);
-        if (locCache.has(key)) return locCache.get(key)!;
-        const ex = await client.query<{ id: string }>(
-          "select id from locations where tenant_id=$1 and lower(name)=lower($2) limit 1",
-          [t, name]
-        );
-        let id = ex.rows[0]?.id;
-        if (!id) {
-          const ins = await client.query<{ id: string }>(
-            "insert into locations (tenant_id, name, status) values ($1,$2,'active') returning id",
-            [t, name]
-          );
-          id = ins.rows[0].id;
-        }
-        locCache.set(key, id);
-        return id;
-      }
-      async function findEmp(name: string | null): Promise<string | null> {
-        if (!name) return null;
-        const key = norm(name);
-        if (empCache.has(key)) return empCache.get(key)!;
-        const ex = await client.query<{ id: string }>(
-          "select id from employees where tenant_id=$1 and lower(full_name)=lower($2) limit 1",
-          [t, name]
-        );
-        const id = ex.rows[0]?.id ?? null;
-        if (id) empCache.set(key, id);
-        return id;
-      }
-      async function ensureCompany(name: string | null): Promise<string | null> {
-        if (!name) return null;
-        const key = norm(name);
-        if (companyCache.has(key)) return companyCache.get(key)!;
-        const ex = await client.query<{ id: string }>(
-          "select id from companies where tenant_id=$1 and (lower(trade_name)=lower($2) or lower(legal_name)=lower($2)) limit 1",
-          [t, name]
-        );
-        let id = ex.rows[0]?.id;
-        if (!id) {
-          const ins = await client.query<{ id: string }>(
-            "insert into companies (tenant_id, trade_name, legal_name, status) values ($1,$2,$2,'active') returning id",
-            [t, name]
-          );
-          id = ins.rows[0].id;
-        }
-        companyCache.set(key, id);
-        return id;
-      }
+  const categoryMap = new Map(categoriesDb.rows.map((c) => [norm(c.name), c.id]));
+  const locationMap = new Map(locationsDb.rows.map((l) => [norm(l.name), l.id]));
+  
+  // Mapear colaboradores pelo nome e também pelo email
+  const employeeNameMap = new Map(employeesDb.rows.map((e) => [norm(e.full_name), e.id]));
+  const employeeEmailMap = new Map(
+    employeesDb.rows.filter((e) => e.email).map((e) => [norm(e.email!), e.id])
+  );
 
-      // 1. Colaboradores
-      for (const row of sheet("colaborador")) {
-        const name = pick(row, ["Nome Completo", "Nome", "Colaborador"]);
-        if (!name) continue;
-        const email = pick(row, ["E-mail", "Email"]);
-        const dept = pick(row, ["Departamento", "Setor"]);
-        const registrationNumber = pick(row, ["Matrícula", "Matricula", "Registro"]);
-        const jobTitle = pick(row, ["Cargo", "Função", "Funcao"]);
-        const phone = pick(row, ["Telefone", "Celular", "Fone"]);
+  const errors: ImportError[] = [];
+  const validRowsToCommit: Array<{
+    data: Record<string, unknown>;
+    rawRowIndex: number;
+  }> = [];
 
-        const existing = await client.query<{ id: string }>(
-          "select id from employees where tenant_id=$1 and (lower(full_name)=lower($2) or (email is not null and lower(email)=lower($3))) limit 1",
-          [t, name, email ?? ""]
-        );
-        if (existing.rows[0]) {
-          summary.employees.skipped++;
-          empCache.set(norm(name), existing.rows[0].id);
-          continue;
-        }
-        const deptId = await ensureDept(dept);
-        const ins = await client.query<{ id: string }>(
-          "insert into employees (tenant_id, full_name, email, department_id, registration_number, job_title, phone, status) values ($1,$2,$3,$4,$5,$6,$7,'Ativo') returning id",
-          [t, name, email, deptId, registrationNumber, jobTitle, phone]
-        );
-        empCache.set(norm(name), ins.rows[0].id);
-        summary.employees.created++;
-      }
+  // Rastreador de duplicados dentro da própria planilha
+  const seenSerials = new Set<string>();
+  const seenTags = new Set<string>();
+  const seenTecladoSerials = new Set<string>();
+  const seenMouseSerials = new Set<string>();
+  const seenHeadsetSerials = new Set<string>();
 
-      // 2. Ativos
-      for (const row of sheet("ativo")) {
-        const name = pick(row, ["Nome do Equipamento", "Nome do Ativo", "Equipamento", "Nome"]);
-        if (!name) continue;
-        const serial = pick(row, ["Nº de Série", "Numero de Serie", "Série", "Serie"]);
-        const tag = pick(row, ["Patrimônio", "Patrimonio", "Tag"]);
-        const category = pick(row, ["Categoria"]) || pick(row, ["Equipamento"]);
-        let brand = pick(row, ["Marca"]);
-        const model = pick(row, ["Modelo"]);
-        if (!brand && model) {
-          const firstWord = model.split(" ")[0];
-          const commonBrands = ["dell", "hp", "lenovo", "apple", "asus", "acer", "samsung", "lg", "positivo", "intelbras", "xiaomi", "microsoft"];
-          if (commonBrands.includes(firstWord.toLowerCase())) {
-            brand = firstWord.toUpperCase();
-          }
-        }
-        const loc = pick(row, ["Localização", "Localizacao"]);
-        const respName = pick(row, ["Responsável", "Responsavel", "Usuário", "Usuario", "User"]);
-        const companyName = pick(row, ["Coligada", "Empresa", "Companhia"]);
-        const companyId = await ensureCompany(companyName);
-        const acqDate = parseDate(pick(row, ["Data de Aquisição", "Aquisicao", "Aquisição", "Ano"]));
-        const acqValue = parseMoney(pick(row, ["Valor de Aquisição", "Valor"]));
-        const usefulLife = Number(pick(row, ["Vida Útil", "Vida Util"]) || "") || null;
-        const status = pick(row, ["Status", "Situação", "Situacao"]) || "Disponível";
+  // Iterar por cada linha (a linha real no Excel é index + 2 por conta do cabeçalho)
+  for (let i = 0; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    const rowIndex = i + 2;
 
-        const internalCode = pick(row, ["Código Interno", "Codigo Interno", "Código", "Codigo", "Cod"]);
-        const manufacturer = pick(row, ["Fabricante"]);
-        const color = pick(row, ["Cor"]);
-        const description = pick(row, ["Descrição", "Descricao"]);
-        let physicalCondition = pick(row, ["Estado", "Conservação", "Conservacao", "Condição", "Condicao", "Situação", "Situacao"]);
-        if (physicalCondition) {
-          const pcLower = physicalCondition.toLowerCase();
-          if (pcLower.includes("boa") || pcLower.includes("bom")) physicalCondition = "Bom";
-          else if (pcLower.includes("regular") || pcLower.includes("aten")) physicalCondition = "Regular";
-          else if (pcLower.includes("criti") || pcLower.includes("ruim")) physicalCondition = "Ruim";
-          else if (pcLower.includes("novo")) physicalCondition = "Novo";
-          else if (pcLower.includes("excelente")) physicalCondition = "Excelente";
-          else if (pcLower.includes("irrecu")) physicalCondition = "Irrecuperável";
-        }
-        const invoiceNumber = pick(row, ["Nota Fiscal", "NF", "Número da Nota", "Numero da Nota"]);
-        const purchaseOrder = pick(row, ["Ordem de Compra", "OC", "Pedido"]);
-        const notes = pick(row, ["Observações", "Observacoes", "Notas", "OBS", "Obs"]);
+    const category = pick(row, ["categoria_ativo", "categoria", "tipo"]);
+    const nomeMaquina = pick(row, ["nome_maquina", "nome"]);
+    const tag = pick(row, ["patrimonio", "etiqueta", "tag"]);
+    const serial = pick(row, ["numero_serie", "serie", "serial"]);
+    const serialTeclado = pick(row, ["numero_serie_teclado", "serie_teclado", "serial_teclado"]);
+    const serialMouse = pick(row, ["numero_serie_mouse", "serie_mouse", "serial_mouse"]);
+    const serialHeadset = pick(row, ["numero_serie_headset", "serie_headset", "serial_headset"]);
+    const brand = pick(row, ["marca"]);
+    const model = pick(row, ["modelo"]);
+    const condicao = pick(row, ["condicao", "situacao", "estado"]);
+    const observacoes = pick(row, ["observacoes", "obs", "observacao"]);
+    const usuarioResponsavel = pick(row, ["usuario_responsavel", "responsavel", "user", "nome_usuario"]);
+    const emailUsuario = pick(row, ["email_usuario", "email", "email_responsavel"]);
+    const anoProduto = pick(row, ["ano_produto", "ano"]);
+    const localizacao = pick(row, ["localizacao", "local"]);
+    const processador = pick(row, ["processador", "cpu"]);
+    const sistemaOperacional = pick(row, ["sistema_operacional", "so", "sistema"]);
+    const enderecoMac = pick(row, ["endereco_mac", "mac"]);
+    const enderecoIp = pick(row, ["endereco_ip", "ip"]);
+    const chaveLicencaWindows = pick(row, ["chave_licenca_windows", "licenca", "chave_windows"]);
+    const tamanhoPolegadas = pick(row, ["tamanho_polegadas", "polegadas", "tamanho"]);
+    const numeroNotaFiscal = pick(row, ["numero_nota_fiscal", "nota_fiscal", "nf"]);
+    const dataCompra = pick(row, ["data_compra", "data_aquisicao", "data"]);
+    const valorCompra = pick(row, ["valor_compra", "valor", "preco"]);
+    const fornecedor = pick(row, ["fornecedor"]);
 
-        const processador = pick(row, ["Processador", "CPU"]);
-        const sistemaOperacional = pick(row, ["Sistema Operacional", "S.O.", "SO", "Sistema"]);
-        const hostname = pick(row, ["Nome da máquina", "Nome da maquina", "Hostname", "Nome de máquina", "Nome de maquina"]);
+    let rowHasError = false;
 
-        const technical: Record<string, string> = {};
-        if (processador) technical.processador = processador;
-        if (sistemaOperacional) technical.sistema_operacional = sistemaOperacional;
-        if (hostname) technical.hostname = hostname;
+    const addRowError = (column: string, message: string) => {
+      errors.push({ row: rowIndex, column, message });
+      rowHasError = true;
+    };
 
-        const technicalDataJson = Object.keys(technical).length ? JSON.stringify(technical) : null;
-
-        // Duplicidade por série e patrimônio
-        let isDuplicate = false;
-        let dupInfo = "";
-        if (serial) {
-          const dupSerial = await client.query(
-            "select id from assets where tenant_id=$1 and serial_number=$2 and deleted_at is null limit 1",
-            [t, serial]
-          );
-          if (dupSerial.rows[0]) {
-            isDuplicate = true;
-            dupInfo = `Série: ${serial}`;
-          }
-        }
-        if (!isDuplicate && tag) {
-          const dupTag = await client.query(
-            "select id from assets where tenant_id=$1 and asset_tag=$2 and deleted_at is null limit 1",
-            [t, tag]
-          );
-          if (dupTag.rows[0]) {
-            isDuplicate = true;
-            dupInfo = `Patrimônio: ${tag}`;
-          }
-        }
-
-        if (isDuplicate) {
-          summary.assets.skipped++;
-          summary.assets.duplicates.push(`${name} (${dupInfo})`);
-          continue;
-        }
-
-        const catId = await ensureCat(category);
-        const locId = await ensureLoc(loc);
-        
-        let empId = await findEmp(respName);
-        if (!empId && respName) {
-          const dept = pick(row, ["Departamento", "Setor"]);
-          const deptId = await ensureDept(dept);
-          const ins = await client.query<{ id: string }>(
-            "insert into employees (tenant_id, full_name, department_id, status) values ($1,$2,$3,'Ativo') returning id",
-            [t, respName, deptId]
-          );
-          empId = ins.rows[0].id;
-          empCache.set(norm(respName), empId);
-          summary.employees.created++;
-        }
-
-        const replDate = computeReplacementDate(acqDate, usefulLife);
-        const mappedStatus = norm(status) === "ativo" || norm(status) === "boa" ? (empId ? "Em uso" : "Disponível") : status;
-
-        await client.query(
-          `insert into assets (tenant_id, category_id, name, serial_number, asset_tag, brand, model, location_id,
-             current_employee_id, company_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
-             replacement_status, status, internal_code, manufacturer, color, description, physical_condition,
-             invoice_number, purchase_order, notes, technical_data)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
-          [
-            t, catId, name, serial, tag, brand, model, locId, empId, companyId, acqDate, acqValue, usefulLife,
-            replDate ? replDate.toISOString().slice(0, 10) : null,
-            classifyReplacement(replDate), mappedStatus, internalCode, manufacturer, color, description, physicalCondition,
-            invoiceNumber, purchaseOrder, notes, technicalDataJson
-          ]
-        );
-        summary.assets.created++;
-      }
-
-      // 3. Manutenções
-      for (const row of sheet("manuten")) {
-        const serial = pick(row, ["Nº de Série", "Série", "Serie", "Patrimônio", "Patrimonio"]);
-        if (!serial) { summary.maintenances.skipped++; continue; }
-        const asset = await client.query<{ id: string }>(
-          "select id from assets where tenant_id=$1 and (serial_number=$2 or asset_tag=$2) and deleted_at is null limit 1",
-          [t, serial]
-        );
-        if (!asset.rows[0]) { summary.maintenances.skipped++; continue; }
-        const type = pick(row, ["Tipo"]) || "Corretiva";
-        const date = parseDate(pick(row, ["Data da Manutenção", "Data"]));
-        const desc = pick(row, ["Descrição", "Descricao", "Problema"]);
-        const cost = parseMoney(pick(row, ["Custo"])) ?? 0;
-        const mStatus = pick(row, ["Status da Manutenção", "Status"]) || "Concluída";
-
-        await client.query(
-          `insert into maintenances (tenant_id, asset_id, type, status, problem_description, total_cost, service_cost, opened_at, completed_at)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [t, asset.rows[0].id, type, mStatus, desc, cost, cost, date || new Date().toISOString(), mStatus === "Concluída" ? (date || new Date().toISOString()) : null]
-        );
-        summary.maintenances.created++;
-      }
-
-      if (!commit) {
-        // Dry-run: desfaz tudo
-        throw { rollbackPreview: true };
-      }
-
-      await recordAudit({ user, action: "import", entityType: "spreadsheet", newValues: summary, client });
-    });
-  } catch (e: unknown) {
-    if (e && typeof e === "object" && "rollbackPreview" in e) {
-      return NextResponse.json({ preview: true, summary });
+    // 1. Validar Categoria
+    if (!category) {
+      addRowError("categoria_ativo", "A categoria do ativo é obrigatória.");
+      continue; // Não dá pra fazer validações específicas sem categoria
     }
-    return NextResponse.json(
-      { error: "Erro na importação: " + (e instanceof Error ? e.message : String(e)) },
-      { status: 500 }
-    );
+
+    const catNorm = norm(category);
+    const validCategories = ["notebook", "monitor", "kit teclado e mouse", "headset"];
+    if (!validCategories.includes(catNorm)) {
+      addRowError("categoria_ativo", `Categoria "${category}" é inválida. Escolha entre: Notebook, Monitor, Kit teclado e mouse, Headset.`);
+      continue;
+    }
+
+    // Obter ID da categoria (deve existir no banco graças ao self-healing)
+    const categoryId = categoryMap.get(catNorm) || null;
+    if (!categoryId) {
+      addRowError("categoria_ativo", `Categoria "${category}" não encontrada no sistema.`);
+      continue;
+    }
+
+    // 2. Validar Condição
+    if (!condicao) {
+      addRowError("condicao", "A condição do equipamento é obrigatória.");
+    } else {
+      const condNorm = norm(condicao);
+      if (!["boa", "media", "media", "ruim"].includes(condNorm)) {
+        addRowError("condicao", `Condição "${condicao}" é inválida. Escolha entre: Boa, Média ou Ruim.`);
+      }
+    }
+
+    // 3. Validar Localização
+    let locationId: string | null = null;
+    if (!localizacao) {
+      addRowError("localizacao", "A localização do equipamento é obrigatória.");
+    } else {
+      const locNorm = norm(localizacao);
+      locationId = locationMap.get(locNorm) || null;
+      if (!locationId) {
+        addRowError("localizacao", `Localização "${localizacao}" não cadastrada no sistema.`);
+      }
+    }
+
+    // 4. Validar Usuário Responsável (se preenchido)
+    let employeeId: string | null = null;
+    if (usuarioResponsavel || emailUsuario) {
+      if (emailUsuario) {
+        employeeId = employeeEmailMap.get(norm(emailUsuario)) || null;
+      }
+      if (!employeeId && usuarioResponsavel) {
+        employeeId = employeeNameMap.get(norm(usuarioResponsavel)) || null;
+      }
+      if (!employeeId) {
+        addRowError(
+          usuarioResponsavel ? "usuario_responsavel" : "email_usuario",
+          `Responsável "${usuarioResponsavel || emailUsuario}" não encontrado ou inativo no sistema.`
+        );
+      }
+    }
+
+    // 5. Validar formatos MAC e IP
+    if (enderecoMac) {
+      const macRegex = /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/;
+      if (!macRegex.test(enderecoMac)) {
+        addRowError("endereco_mac", `Endereço MAC "${enderecoMac}" inválido. Use o formato: 00:1A:2B:3C:4D:5E.`);
+      }
+    }
+
+    if (enderecoIp) {
+      const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+      if (!ipRegex.test(enderecoIp)) {
+        addRowError("endereco_ip", `Endereço IP "${enderecoIp}" inválido.`);
+      } else {
+        const parts = enderecoIp.split(".").map(Number);
+        if (parts.some((p) => p < 0 || p > 255)) {
+          addRowError("endereco_ip", `Endereço IP "${enderecoIp}" possui octetos fora do intervalo 0-255.`);
+        }
+      }
+    }
+
+    // 6. Validar ano do produto
+    if (anoProduto) {
+      const yr = Number(anoProduto);
+      if (Number.isNaN(yr) || yr < 1900 || yr > 2100) {
+        addRowError("ano_produto", `Ano do produto "${anoProduto}" inválido. Deve ser um número entre 1900 e 2100.`);
+      }
+    }
+
+    // 7. Validar campos específicos de cada categoria
+    if (catNorm === "notebook") {
+      if (!nomeMaquina) addRowError("nome_maquina", "Nome da máquina é obrigatório para Notebook.");
+      if (!serial) addRowError("numero_serie", "Número de série é obrigatório para Notebook.");
+      if (!tag) addRowError("patrimonio", "Patrimônio é obrigatório para Notebook.");
+      if (!brand) addRowError("marca", "Marca é obrigatória para Notebook.");
+      if (!model) addRowError("modelo", "Modelo é obrigatório para Notebook.");
+    } else if (catNorm === "monitor") {
+      if (!tag) addRowError("patrimonio", "Patrimônio é obrigatório para Monitor.");
+      if (!serial) addRowError("numero_serie", "Número de série é obrigatório para Monitor.");
+      if (!brand) addRowError("marca", "Marca é obrigatória para Monitor.");
+      if (!model) addRowError("modelo", "Modelo do monitor é obrigatório para Monitor.");
+      if (!tamanhoPolegadas || Number.isNaN(Number(tamanhoPolegadas))) {
+        addRowError("tamanho_polegadas", "Tamanho em polegadas é obrigatório e deve ser numérico para Monitor.");
+      }
+    } else if (catNorm === "kit teclado e mouse") {
+      if (!serialTeclado) addRowError("numero_serie_teclado", "Número de série do teclado é obrigatório para Kit.");
+      if (!serialMouse) addRowError("numero_serie_mouse", "Número de série do mouse é obrigatório para Kit.");
+      if (!brand) addRowError("marca", "Marca é obrigatória para Kit teclado e mouse.");
+      if (!model) addRowError("modelo", "Modelo é obrigatório para Kit teclado e mouse.");
+    } else if (catNorm === "headset") {
+      if (!serialHeadset) addRowError("numero_serie_headset", "Número de série do headset é obrigatório para Headset.");
+      if (!brand) addRowError("marca", "Marca é obrigatória para Headset.");
+      if (!model) addRowError("modelo", "Modelo é obrigatório para Headset.");
+    }
+
+    // 8. Validar duplicidades internas na planilha
+    if (serial) {
+      const sNorm = norm(serial);
+      if (seenSerials.has(sNorm)) {
+        addRowError("numero_serie", `Número de série "${serial}" está duplicado dentro da planilha.`);
+      }
+      seenSerials.add(sNorm);
+    }
+    if (tag) {
+      const tNorm = norm(tag);
+      if (seenTags.has(tNorm)) {
+        addRowError("patrimonio", `Patrimônio "${tag}" está duplicado dentro da planilha.`);
+      }
+      seenTags.add(tNorm);
+    }
+    if (serialTeclado) {
+      const stNorm = norm(serialTeclado);
+      if (seenTecladoSerials.has(stNorm)) {
+        addRowError("numero_serie_teclado", `Nº de série do teclado "${serialTeclado}" duplicado na planilha.`);
+      }
+      seenTecladoSerials.add(stNorm);
+    }
+    if (serialMouse) {
+      const smNorm = norm(serialMouse);
+      if (seenMouseSerials.has(smNorm)) {
+        addRowError("numero_serie_mouse", `Nº de série do mouse "${serialMouse}" duplicado na planilha.`);
+      }
+      seenMouseSerials.add(smNorm);
+    }
+    if (serialHeadset) {
+      const shNorm = norm(serialHeadset);
+      if (seenHeadsetSerials.has(shNorm)) {
+        addRowError("numero_serie_headset", `Nº de série do headset "${serialHeadset}" duplicado na planilha.`);
+      }
+      seenHeadsetSerials.add(shNorm);
+    }
+
+    // 9. Validar duplicidades em relação ao banco de dados
+    if (serial) {
+      const dupDb = await pool.query("select id from assets where tenant_id=$1 and serial_number=$2 and deleted_at is null limit 1", [t, serial]);
+      if (dupDb.rows.length > 0) {
+        addRowError("numero_serie", `Número de série "${serial}" já está cadastrado no sistema.`);
+      }
+    }
+    if (tag) {
+      const dupDb = await pool.query("select id from assets where tenant_id=$1 and asset_tag=$2 and deleted_at is null limit 1", [t, tag]);
+      if (dupDb.rows.length > 0) {
+        addRowError("patrimonio", `Patrimônio "${tag}" já está cadastrado no sistema.`);
+      }
+    }
+
+    // Montar payload técnico dinâmico
+    const technical: Record<string, string> = {};
+    if (processador) technical.processador = processador;
+    if (sistemaOperacional) technical.sistema_operacional = sistemaOperacional;
+    if (enderecoMac) technical.endereco_mac = enderecoMac;
+    if (enderecoIp) technical.endereco_ip = enderecoIp;
+    if (chaveLicencaWindows) technical.chave_licenca_windows = chaveLicencaWindows;
+    if (tamanhoPolegadas) technical.tamanho_polegadas = tamanhoPolegadas;
+    if (serialTeclado) technical.numero_serie_teclado = serialTeclado;
+    if (serialMouse) technical.numero_serie_mouse = serialMouse;
+    if (serialHeadset) technical.numero_serie_headset = serialHeadset;
+    if (anoProduto) technical.ano_produto = anoProduto;
+
+    // Normalizar a condição física para o padrão capitalizado do banco
+    let normalizedCondition = "Boa";
+    if (condicao) {
+      const c = norm(condicao);
+      if (c === "boa") normalizedCondition = "Boa";
+      if (c === "media" || c === "média") normalizedCondition = "Média";
+      if (c === "ruim") normalizedCondition = "Ruim";
+    }
+
+    // Obter o fornecedor cadastrado se houver
+    let supplierId: string | null = null;
+    if (fornecedor) {
+      const supDb = await pool.query<{ id: string }>(
+        "select id from suppliers where tenant_id=$1 and lower(trade_name)=lower($2) limit 1",
+        [t, fornecedor]
+      );
+      supplierId = supDb.rows[0]?.id || null;
+    }
+
+    // Obter a coligada se preenchida
+    let companyId: string | null = null;
+    const coligadaName = pick(row, ["coligada", "empresa"]);
+    if (coligadaName) {
+      const compDb = await pool.query<{ id: string }>(
+        "select id from companies where tenant_id=$1 and (lower(trade_name)=lower($2) or lower(legal_name)=lower($2)) limit 1",
+        [t, coligadaName]
+      );
+      companyId = compDb.rows[0]?.id || null;
+    }
+
+    // Nome final do ativo
+    let finalName = nomeMaquina;
+    if (!finalName) {
+      finalName = `${category} ${brand} ${model}`.trim();
+    }
+
+    const acqDate = parseDate(dataCompra);
+    const acqValue = parseMoney(valorCompra);
+
+    if (!rowHasError) {
+      validRowsToCommit.push({
+        rawRowIndex: rowIndex,
+        data: {
+          category_id: categoryId,
+          name: finalName,
+          serial_number: serial || null,
+          asset_tag: tag || null,
+          brand: brand || null,
+          model: model || null,
+          physical_condition: normalizedCondition,
+          notes: observacoes || null,
+          current_employee_id: employeeId,
+          location_id: locationId,
+          technical_data: Object.keys(technical).length ? JSON.stringify(technical) : null,
+          invoice_number: numeroNotaFiscal || null,
+          acquisition_date: acqDate,
+          acquisition_value: acqValue,
+          supplier_id: supplierId,
+          company_id: companyId,
+          status: employeeId ? "Em uso" : "Disponível",
+        },
+      });
+    }
   }
 
-  return NextResponse.json({ committed: true, summary });
+  const validCount = validRowsToCommit.length;
+  const invalidCount = rawRows.length - validCount;
+
+  // Se commit for solicitado, persistir somente os registros autorizados
+  let importedCount = 0;
+  if (commit && (validCount > 0 || (importValidOnly && validCount > 0))) {
+    try {
+      await transaction(async (client) => {
+        for (const valid of validRowsToCommit) {
+          const d = valid.data;
+          const keys = Object.keys(d);
+          const cols = ["tenant_id", ...keys];
+          const ph = cols.map((_, i) => `$${i + 1}`);
+
+          await client.query(
+            `insert into assets (${cols.join(", ")}) values (${ph.join(", ")})`,
+            [t, ...keys.map((k) => d[k])]
+          );
+          importedCount++;
+        }
+      });
+
+      await recordAudit({
+        user,
+        action: "import",
+        entityType: "asset",
+        entityId: "bulk",
+        newValues: { count: importedCount },
+      });
+    } catch (err: unknown) {
+      return NextResponse.json({ error: "Erro ao gravar no banco: " + (err instanceof Error ? err.message : String(err)) }, { status: 500 });
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    validCount,
+    invalidCount,
+    errors,
+    importedCount,
+    commitExecuted: commit,
+  });
 }

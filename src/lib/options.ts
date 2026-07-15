@@ -35,6 +35,28 @@ export async function locationOptions(tenantId: string | null): Promise<FieldOpt
 }
 
 export async function categoryOptions(tenantId: string | null): Promise<FieldOption[]> {
+  if (tenantId) {
+    const required = ["Notebook", "Monitor", "Kit teclado e mouse", "Headset"];
+    for (const name of required) {
+      const ex = await query<{ id: string }>(
+        "select id from asset_categories where tenant_id = $1 and lower(name) = lower($2) limit 1",
+        [tenantId, name]
+      );
+      if (ex.length === 0) {
+        let icon = "📦";
+        if (name === "Notebook") icon = "💻";
+        else if (name === "Monitor") icon = "🖥️";
+        else if (name === "Kit teclado e mouse") icon = "🖱️";
+        else if (name === "Headset") icon = "🎧";
+
+        await query(
+          "insert into asset_categories (tenant_id, name, icon, status) values ($1, $2, $3, 'active')",
+          [tenantId, name, icon]
+        );
+      }
+    }
+  }
+
   const rows = await query<{ id: string; name: string }>(
     `select id, name from asset_categories where tenant_id = $1 and status = 'active' order by name`,
     [tenantId]

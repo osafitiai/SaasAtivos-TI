@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveAsset } from "@/app/(app)/ativos/actions";
+import { saveAsset, quickCreateLocation } from "@/app/(app)/ativos/actions";
 import type { FieldOption } from "@/components/CrudManager";
 import type { Asset } from "@/lib/types";
-import { ASSET_STATUSES, PHYSICAL_CONDITIONS } from "@/lib/constants";
-import { toDateInputValue } from "@/lib/format";
 
 interface Options {
   categories: FieldOption[];
@@ -18,58 +16,99 @@ interface Options {
   employees: FieldOption[];
 }
 
-const SECTIONS = [
-  "Identificação",
-  "Categoria e dados técnicos",
-  "Localização e responsável",
-  "Garantia",
-  "Revisão",
-];
-
 export function AssetForm({ options, asset }: { options: Options; asset?: Asset }) {
   const router = useRouter();
+  const [categoryId, setCategoryId] = useState(asset?.category_id ?? "");
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [categoryId, setCategoryId] = useState(asset?.category_id ?? "");
+  const [locations, setLocations] = useState(options.locations);
+  const [selectedLoc, setSelectedLoc] = useState(asset?.location_id ?? "");
 
   const selectedCatLabel = options.categories.find((o) => o.value === categoryId)?.label || "";
+  const catLower = selectedCatLabel.toLowerCase();
+
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado");
+  const isHeadset = catLower.includes("headset");
+
   const tech = (asset?.technical_data ?? {}) as Record<string, string>;
+
+  // Apenas notebook tem duas abas. Os outros têm apenas "Identificação"
+  const tabs = isNotebook ? ["Identificação", "Dados técnicos"] : ["Identificação"];
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (categoryId && val && val !== categoryId) {
+      if (
+        !confirm(
+          "Alterar a categoria pode apagar os dados específicos já preenchidos nesta tela. Deseja continuar?"
+        )
+      ) {
+        return;
+      }
+    }
+    setCategoryId(val);
+    setStep(0);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleAddLocation = async () => {
+    const name = prompt("Digite o nome da nova localização:");
+    if (!name || name.trim() === "") return;
+    const res = await quickCreateLocation(name.trim());
+    if (res.error) {
+      alert("Erro ao criar localização: " + res.error);
+    } else if (res.id) {
+      const newOpt = { value: res.id, label: name.trim() };
+      setLocations((prev) => [...prev, newOpt]);
+      setSelectedLoc(res.id);
+    }
+  };
 
   async function handleSubmit(formData: FormData) {
     setPending(true);
     setError(null);
+    setSuccess(null);
+    // Adiciona localização atual selecionada caso tenha sido criada dinamicamente
+    formData.set("location_id", selectedLoc);
+
+    // Se for kit ou headset, o nome do ativo pode ser o Modelo ou Categoria + Modelo
+    const brand = String(formData.get("brand") || "").trim();
+    const model = String(formData.get("model") || "").trim();
+    const nameMaquina = String(formData.get("name") || "").trim();
+    
+    let finalName = nameMaquina;
+    if (!finalName) {
+      finalName = `${selectedCatLabel} ${brand} ${model}`.trim();
+    }
+    formData.set("name", finalName);
+
     const res = await saveAsset(formData);
     setPending(false);
     if (res.error) {
       setError(res.error);
       return;
     }
-    router.push(res.id ? `/ativos/${res.id}` : "/ativos");
-    router.refresh();
+    setSuccess("Ativo salvo com sucesso!");
+    setTimeout(() => {
+      router.push(res.id ? `/ativos/${res.id}` : "/ativos");
+      router.refresh();
+    }, 1500);
   }
 
   return (
     <form action={handleSubmit} className="space-y-6">
       {asset && <input type="hidden" name="id" value={asset.id} />}
 
-      {/* Stepper */}
-      <div className="flex flex-wrap gap-2">
-        {SECTIONS.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStep(i)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              i === step
-                ? "bg-brand-600 text-white"
-                : "bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300"
-            }`}
-          >
-            {i + 1}. {s}
-          </button>
-        ))}
-      </div>
+      {success && (
+        <div className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-300">
+          {success}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
@@ -77,216 +116,520 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
         </div>
       )}
 
-      {/* Todas as seções ficam no DOM (display) para não perder valores ao trocar de aba */}
-      <Section active={step === 0}>
-        <Grid>
-          <Field label="Nome do ativo" required span={2}>
-            <input name="name" required defaultValue={asset?.name ?? ""} className="input" />
-          </Field>
-          <Field label="Patrimônio">
-            <input name="asset_tag" defaultValue={asset?.asset_tag ?? ""} className="input" />
-          </Field>
-          <Field label="Número de série">
-            <input name="serial_number" defaultValue={asset?.serial_number ?? ""} className="input" />
-          </Field>
-          <Field label="Marca">
-            <input name="brand" defaultValue={asset?.brand ?? ""} className="input" />
-          </Field>
-          <Field label="Modelo">
-            <input name="model" defaultValue={asset?.model ?? ""} className="input" />
-          </Field>
-          <Field label="Condição física">
-            <select name="physical_condition" defaultValue={asset?.physical_condition ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {PHYSICAL_CONDITIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Descrição" span={2}>
-            <textarea name="description" rows={2} defaultValue={asset?.description ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 1}>
-        <Grid>
-          <Field label="Categoria" required>
-            <select
-              name="category_id"
-              required
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="input"
-            >
-              <option value="">— selecione —</option>
-              {options.categories.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Vida útil (anos)" help="Vazio herda da categoria">
-            <input name="useful_life_years" type="number" min="0" defaultValue={asset?.useful_life_years ?? ""} className="input" />
-          </Field>
-        </Grid>
-
-        {/* Exibição condicional de campos técnicos dependendo da categoria selecionada */}
-        {selectedCatLabel && (
-          <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-            <h4 className="mb-4 text-sm font-semibold text-slate-500">Dados técnicos do item</h4>
-            
-            {["notebook", "desktop", "servidor"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
-              <Grid>
-                <TechField label="Processador" name="processador" tech={tech} />
-                <TechField label="Memória RAM" name="memoria_ram" tech={tech} />
-                <TechField label="Armazenamento" name="armazenamento" tech={tech} />
-                <TechField label="Sistema operacional" name="sistema_operacional" tech={tech} />
-                <TechField label="Nome da máquina (Hostname)" name="hostname" tech={tech} />
-                <TechField label="IP" name="ip" tech={tech} />
-                <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
-                <TechField label="MAC Wi-Fi" name="mac_wifi" tech={tech} />
-              </Grid>
-            )}
-
-            {["monitor"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
-              <Grid>
-                <TechField label="Tamanho (polegadas)" name="tamanho" tech={tech} />
-                <TechField label="Resolução" name="resolucao" tech={tech} />
-              </Grid>
-            )}
-
-            {["smartphone", "tablet"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
-              <Grid>
-                <TechField label="IMEI" name="imei" tech={tech} />
-                <TechField label="Número da linha" name="numero_linha" tech={tech} />
-                <TechField label="Operadora" name="operadora" tech={tech} />
-                <TechField label="Capacidade" name="capacidade" tech={tech} />
-                <TechField label="Estado da bateria" name="estado_bateria" tech={tech} />
-              </Grid>
-            )}
-
-            {["switch", "roteador"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
-              <Grid>
-                <TechField label="Nº de portas" name="portas" tech={tech} />
-                <TechField label="IP" name="ip" tech={tech} />
-                <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
-              </Grid>
-            )}
-
-            {!["notebook", "desktop", "servidor", "monitor", "smartphone", "tablet", "switch", "roteador"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
-              <p className="text-xs text-slate-400">Esta categoria não possui campos técnicos específicos.</p>
-            )}
-          </div>
-        )}
-      </Section>
-
-      <Section active={step === 2}>
-        <Grid>
-          <Field label="Responsável atual">
-            <select name="current_employee_id" defaultValue={asset?.current_employee_id ?? ""} className="input">
-              <option value="">— Sem responsável —</option>
-              {options.employees.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Filial">
-            <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.branches.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Departamento">
-            <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.departments.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Localização">
-            <select name="location_id" defaultValue={asset?.location_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.locations.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Status">
-            <select name="status" defaultValue={asset?.status ?? "Disponível"} className="input">
-              {ASSET_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>{s.value}</option>
-              ))}
-            </select>
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 3}>
-        <Grid>
-          <Field label="Início da garantia">
-            <input name="warranty_start_date" type="date" defaultValue={toDateInputValue(asset?.warranty_start_date)} className="input" />
-          </Field>
-          <Field label="Término da garantia">
-            <input name="warranty_end_date" type="date" defaultValue={toDateInputValue(asset?.warranty_end_date)} className="input" />
-          </Field>
-          <Field label="Observações" span={2}>
-            <textarea name="notes" rows={3} defaultValue={asset?.notes ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 4}>
-        <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
-          Revise os dados nas abas anteriores e clique em salvar para concluir o cadastro ou edição do ativo.
-        </div>
-      </Section>
-
-      {/* Navegação */}
-      <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
-          disabled={step === 0}
+      {/* Categoria do Ativo (Sempre visível no topo e obrigatório) */}
+      <div className="card p-4">
+        <label className="label font-bold text-slate-700 dark:text-slate-200">
+          Categoria do ativo <span className="text-red-500">*</span>
+        </label>
+        <select
+          name="category_id"
+          required
+          value={categoryId}
+          onChange={handleCategoryChange}
+          className="input mt-1"
         >
-          ← Anterior
-        </button>
-        <div className="flex gap-2">
-          {step < SECTIONS.length - 1 ? (
-            <button type="button" className="btn-primary" onClick={() => setStep((s) => s + 1)}>
-              Próximo →
-            </button>
-          ) : (
-            <button type="submit" className="btn-primary" disabled={pending}>
-              {pending ? "Salvando..." : "Salvar ativo"}
-            </button>
-          )}
-        </div>
+          <option value="">— selecione a categoria —</option>
+          {options.categories.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {categoryId && (
+        <>
+          {/* Abas dinâmicas se houver mais de uma */}
+          {tabs.length > 1 && (
+            <div className="flex gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+              {tabs.map((t, idx) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setStep(idx)}
+                  className={`border-b-2 px-4 py-2 text-sm font-medium transition ${
+                    step === idx
+                      ? "border-brand-600 text-brand-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ABA 1: Identificação (Comum para todos, mas campos variam) */}
+          {step === 0 && (
+            <div className="card p-6">
+              <Grid>
+                {/* 1. Notebook Form */}
+                {isNotebook && (
+                  <>
+                    <Field label="Nome da máquina" required>
+                      <input
+                        name="name"
+                        required
+                        defaultValue={asset?.name ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série" required>
+                      <input
+                        name="serial_number"
+                        required
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio" required>
+                      <input
+                        name="asset_tag"
+                        required
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Ano do produto">
+                      <input
+                        name="tech_ano_produto"
+                        type="number"
+                        min="1900"
+                        max="2100"
+                        defaultValue={tech.ano_produto ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Observações" span={2}>
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={asset?.notes ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* 2. Monitor Form */}
+                {isMonitor && (
+                  <>
+                    <Field label="Patrimônio" required>
+                      <input
+                        name="asset_tag"
+                        required
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série" required>
+                      <input
+                        name="serial_number"
+                        required
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo do monitor" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Tamanho em polegadas" required>
+                      <input
+                        name="tech_tamanho_polegadas"
+                        type="number"
+                        min="1"
+                        required
+                        defaultValue={tech.tamanho_polegadas ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Observações" span={2}>
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={asset?.notes ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* 3. Kit Teclado e Mouse Form */}
+                {isKit && (
+                  <>
+                    <Field label="Número de série do teclado" required>
+                      <input
+                        name="tech_numero_serie_teclado"
+                        required
+                        defaultValue={tech.numero_serie_teclado ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série do mouse" required>
+                      <input
+                        name="tech_numero_serie_mouse"
+                        required
+                        defaultValue={tech.numero_serie_mouse ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio (caso exista)">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Observações" span={2}>
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={asset?.notes ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* 4. Headset Form */}
+                {isHeadset && (
+                  <>
+                    <Field label="Número de série do headset" required>
+                      <input
+                        name="tech_numero_serie_headset"
+                        required
+                        defaultValue={tech.numero_serie_headset ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio (caso exista)">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Observações" span={2}>
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={asset?.notes ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                  </>
+                )}
+
+                {/* 5. Fallback Form for any other category */}
+                {!isNotebook && !isMonitor && !isKit && !isHeadset && (
+                  <>
+                    <Field label="Nome do ativo" required span={2}>
+                      <input
+                        name="name"
+                        required
+                        defaultValue={asset?.name ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série">
+                      <input
+                        name="serial_number"
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca">
+                      <input
+                        name="brand"
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo">
+                      <input
+                        name="model"
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
+                      <input
+                        type="file"
+                        name="invoice_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Observações" span={2}>
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={asset?.notes ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                  </>
+                )}
+              </Grid>
+            </div>
+          )}
+
+          {/* ABA 2: Dados técnicos (Apenas para notebook) */}
+          {step === 1 && isNotebook && (
+            <div className="card p-6">
+              <Grid>
+                <Field label="Processador">
+                  <input
+                    name="tech_processador"
+                    defaultValue={tech.processador ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Sistema operacional">
+                  <input
+                    name="tech_sistema_operacional"
+                    defaultValue={tech.sistema_operacional ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Endereço MAC">
+                  <input
+                    name="tech_endereco_mac"
+                    defaultValue={tech.endereco_mac ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Endereço IP">
+                  <input
+                    name="tech_endereco_ip"
+                    defaultValue={tech.endereco_ip ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Chave de licença do Windows">
+                  <input
+                    name="tech_chave_licenca_windows"
+                    defaultValue={tech.chave_licenca_windows ?? ""}
+                    className="input"
+                  />
+                </Field>
+              </Grid>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className="btn-primary px-6 py-2.5 font-bold"
+            >
+              {pending ? "Salvando..." : "Salvar Ativo"}
+            </button>
+          </div>
+        </>
+      )}
     </form>
   );
 }
 
-function Section({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? "block" : "hidden"}>{children}</div>;
-}
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>;
 }
+
 function Field({
   label,
   required,
   span,
-  help,
   children,
 }: {
   label: string;
   required?: boolean;
   span?: number;
-  help?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -295,15 +638,72 @@ function Field({
         {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
-      {help && <p className="mt-1 text-[11px] text-slate-400">{help}</p>}
     </div>
   );
 }
 
-function TechField({ label, name, tech }: { label: string; name: string; tech: Record<string, string> }) {
+function ConditionSelect({ defaultValue }: { defaultValue?: string | null }) {
   return (
-    <Field label={label}>
-      <input name={`tech_${name}`} defaultValue={tech[name] ?? ""} className="input" />
-    </Field>
+    <select name="physical_condition" required defaultValue={defaultValue ?? "Boa"} className="input">
+      <option value="Boa">Boa</option>
+      <option value="Média">Média</option>
+      <option value="Ruim">Ruim</option>
+    </select>
+  );
+}
+
+function EmployeeSelect({
+  employees,
+  defaultValue,
+}: {
+  employees: FieldOption[];
+  defaultValue?: string | null;
+}) {
+  return (
+    <select name="current_employee_id" defaultValue={defaultValue ?? ""} className="input">
+      <option value="">— Sem responsável —</option>
+      {employees.map((e) => (
+        <option key={e.value} value={e.value}>
+          {e.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function LocationSelect({
+  locations,
+  value,
+  onChange,
+  onAddNew,
+}: {
+  locations: FieldOption[];
+  value: string;
+  onChange: (v: string) => void;
+  onAddNew: () => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input flex-1"
+      >
+        <option value="">— selecione —</option>
+        {locations.map((l) => (
+          <option key={l.value} value={l.value}>
+            {l.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={onAddNew}
+        className="btn-secondary px-3 py-2 font-bold text-lg"
+        title="Cadastrar nova localização"
+      >
+        +
+      </button>
+    </div>
   );
 }

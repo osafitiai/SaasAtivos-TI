@@ -6,6 +6,7 @@ import { getSession } from "@/lib/auth";
 import { can } from "@/lib/rbac";
 import { recordAudit } from "@/lib/audit";
 import { computeReplacementDate, classifyReplacement } from "@/lib/replacement";
+import { validateUpload, storeFile } from "@/lib/storage";
 
 function num(v: FormDataEntryValue | null): number | null {
   if (v === null || String(v).trim() === "") return null;
@@ -21,6 +22,8 @@ const TECH_FIELDS = [
   "processador", "memoria_ram", "armazenamento", "tipo_armazenamento", "sistema_operacional",
   "hostname", "mac_ethernet", "mac_wifi", "ip", "imei", "numero_linha", "operadora",
   "tamanho", "resolucao", "portas", "voltagem", "potencia", "capacidade", "estado_bateria",
+  "endereco_mac", "endereco_ip", "chave_licenca_windows", "tamanho_polegadas",
+  "numero_serie_teclado", "numero_serie_mouse", "numero_serie_headset"
 ];
 
 export async function saveAsset(formData: FormData): Promise<{ error?: string; id?: string }> {
@@ -32,6 +35,12 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
   const name = str(formData.get("name"));
   if (!name) return { error: "Nome do ativo é obrigatório." };
   if (!categoryId) return { error: "Categoria é obrigatória." };
+
+  const invoiceFile = formData.get("invoice_file") as File | null;
+  if (invoiceFile && invoiceFile.name && invoiceFile.size > 0) {
+    const err = validateUpload(invoiceFile.name, invoiceFile.size);
+    if (err) return { error: "Nota Fiscal: " + err };
+  }
 
   // Herda vida útil da categoria quando não informada
   let usefulLife = num(formData.get("useful_life_years"));
@@ -86,6 +95,7 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
   };
 
   try {
+    let assetId = id;
     if (id) {
       const before = await queryOne(
         "select * from assets where id = $1 and tenant_id = $2 and deleted_at is null",
@@ -101,7 +111,6 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
       await recordAudit({ user, action: "update", entityType: "asset", entityId: id, oldValues: before, newValues: data });
       revalidatePath("/ativos");
       revalidatePath(`/ativos/${id}`);
-      return { id };
     } else {
       const keys = Object.keys(data);
       const cols = ["tenant_id", ...keys];
@@ -110,10 +119,23 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
         `insert into assets (${cols.join(", ")}) values (${ph.join(", ")}) returning id`,
         [user.tenant_id, ...keys.map((k) => data[k])]
       );
-      await recordAudit({ user, action: "create", entityType: "asset", entityId: inserted?.id, newValues: data });
+      assetId = inserted?.id ?? null;
+      await recordAudit({ user, action: "create", entityType: "asset", entityId: assetId, newValues: data });
       revalidatePath("/ativos");
-      return { id: inserted?.id };
     }
+
+    if (invoiceFile && invoiceFile.name && invoiceFile.size > 0 && assetId) {
+      const bytes = Buffer.from(await invoiceFile.arrayBuffer());
+      const storagePath = await storeFile(user.tenant_id!, invoiceFile.name, bytes, invoiceFile.type);
+      await pool.query(
+        `insert into documents
+           (tenant_id, entity_type, entity_id, document_type, file_name, storage_path, mime_type, size_bytes, uploaded_by_user_id)
+         values ($1, 'asset', $2, 'nota_fiscal', $3, $4, $5, $6, $7)`,
+        [user.tenant_id, assetId, invoiceFile.name, storagePath, invoiceFile.type, invoiceFile.size, user.id]
+      );
+    }
+
+    return { id: assetId ?? undefined };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("uq_assets_serial"))
@@ -201,5 +223,20 @@ export async function deleteAssets(ids: string[]): Promise<{ error?: string }> {
     return {};
   } catch (err: unknown) {
     return { error: "Erro ao excluir: " + (err instanceof Error ? err.message : String(err)) };
+  }
+}
+
+export async function quickCreateLocation(name: string): Promise<{ error?: string; id?: string }> {
+  const user = await getSession();
+  if (!user) return { error: "Não autenticado." };
+
+  try {
+    const ins = await pool.query<{ id: string }>(
+      "insert into locations (tenant_id, name, status) values ($1, $2, 'active') returning id",
+      [user.tenant_id, name]
+    );
+    return { id: ins.rows[0].id };
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) };
   }
 }
