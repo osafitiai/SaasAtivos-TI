@@ -5,12 +5,8 @@ import { canSeeFinancials, can } from "@/lib/rbac";
 import { categoryOptions, employeeOptions, locationOptions, departmentOptions } from "@/lib/options";
 import { ASSET_STATUSES } from "@/lib/constants";
 import { PageHeader } from "@/components/PageHeader";
-import { AssetStatusBadge, ReplacementBadge } from "@/components/Badge";
 import { EmptyState } from "@/components/EmptyState";
-import { MovementModal } from "@/components/MovementModal";
-import { ConfirmButton } from "@/components/ConfirmButton";
-import { deleteAssetById } from "./actions";
-import { formatBRL, formatDate } from "@/lib/format";
+import { AssetsTable } from "@/components/AssetsTable";
 import type { Asset } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -154,74 +150,14 @@ export default async function AtivosPage({
           action={canEdit && <Link href="/ativos/novo" className="btn-primary">+ Novo ativo</Link>}
         />
       ) : (
-        <div className="card overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
-            <thead className="bg-slate-50 dark:bg-slate-800/50">
-              <tr>
-                <th className="table-th">Ativo</th>
-                <th className="table-th">Categoria</th>
-                <th className="table-th">Patrimônio</th>
-                <th className="table-th">Nº Série</th>
-                <th className="table-th">Responsável</th>
-                <th className="table-th">Localização</th>
-                 <th className="table-th">Status</th>
-                <th className="table-th">NF</th>
-                <th className="table-th text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {rows.map((a) => (
-                <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                  <td className="table-td">
-                    <Link href={`/ativos/${a.id}`} className="font-medium text-brand-600 hover:underline">
-                      {a.category_icon} {a.name}
-                    </Link>
-                    <div className="text-xs text-slate-400">{a.brand} {a.model}</div>
-                  </td>
-                  <td className="table-td">{a.category_name}</td>
-                  <td className="table-td">{a.asset_tag || "—"}</td>
-                  <td className="table-td">{a.serial_number || "—"}</td>
-                  <td className="table-td">{a.employee_name || <span className="text-slate-400">—</span>}</td>
-                  <td className="table-td">{a.location_name || "—"}</td>
-                  <td className="table-td"><AssetStatusBadge status={a.status} /></td>
-                  <td className="table-td">
-                    {a.nf_doc_id ? (
-                      <a href={`/api/documents/${a.nf_doc_id}`} className="text-brand-600 hover:underline inline-flex items-center gap-1 font-medium" title="Baixar Nota Fiscal">
-                        📄 NF
-                      </a>
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="table-td text-right">
-                    <div className="flex justify-end gap-1">
-                      {canEdit && (
-                        <MovementModal
-                          assetId={a.id}
-                          employees={employees}
-                          locations={locations}
-                          departments={departments}
-                          trigger="Movimentar"
-                          triggerClass="btn-ghost px-2 py-1 text-xs"
-                        />
-                      )}
-                      <Link href={`/ativos/${a.id}`} className="btn-ghost px-2 py-1 text-xs">Ver</Link>
-                      {canDelete && (
-                        <ConfirmButton
-                          action={deleteAssetById.bind(null, a.id)}
-                          className="btn-ghost px-2 py-1 text-xs text-red-600"
-                          message={`Deseja excluir "${a.name}"? O ativo sai da lista, mas o histórico é preservado.`}
-                        >
-                          Excluir
-                        </ConfirmButton>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <AssetsTable
+          rows={rows}
+          employees={employees}
+          locations={locations}
+          departments={departments}
+          canEdit={canEdit}
+          canDelete={canDelete}
+        />
       )}
 
       {/* Paginação */}

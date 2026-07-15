@@ -181,3 +181,24 @@ export async function updateAssetResponsible(
     return { error: "Erro ao atualizar: " + (err instanceof Error ? err.message : String(err)) };
   }
 }
+
+export async function deleteAssets(ids: string[]): Promise<{ error?: string }> {
+  const user = await getSession();
+  if (!user) return { error: "Não autenticado." };
+  if (!can(user, "assets.delete")) return { error: "Sem permissão para excluir ativos." };
+  if (!ids || ids.length === 0) return { error: "Nenhum ativo selecionado." };
+
+  try {
+    await pool.query(
+      "update assets set deleted_at = now() where id = any($1) and tenant_id = $2",
+      [ids, user.tenant_id]
+    );
+    for (const id of ids) {
+      await recordAudit({ user, action: "delete", entityType: "asset", entityId: id });
+    }
+    revalidatePath("/ativos");
+    return {};
+  } catch (err: unknown) {
+    return { error: "Erro ao excluir: " + (err instanceof Error ? err.message : String(err)) };
+  }
+}
