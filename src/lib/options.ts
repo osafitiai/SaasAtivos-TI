@@ -37,8 +37,10 @@ export async function locationOptions(tenantId: string | null): Promise<FieldOpt
 export async function categoryOptions(tenantId: string | null): Promise<FieldOption[]> {
   if (tenantId) {
     // Limpeza de categorias sujas criadas por importações anteriores incorretas (nomes de colaboradores)
+    // Usamos UPDATE em vez de DELETE para evitar violação de chaves estrangeiras (FK) caso haja ativos vinculados.
     await query(
-      `delete from asset_categories 
+      `update asset_categories 
+          set status = 'inactive'
         where tenant_id = $1 
           and lower(name) in (select lower(full_name) from employees where tenant_id = $1)
           and lower(name) not in ('notebook', 'monitor', 'kit teclado e mouse', 'headset')`,
