@@ -74,7 +74,7 @@ export default async function AtivosPage({
   const rows = await query<Asset>(
     `select a.*, c.name as category_name, c.icon as category_icon,
             e.full_name as employee_name, l.name as location_name, d.name as department_name,
-            (select d.id from documents d where d.entity_type = 'asset' and d.entity_id = a.id and d.document_type = 'nota_fiscal' and d.deleted_at is null order by d.created_at desc limit 1) as nf_doc_id
+            (select doc.id from documents doc where doc.entity_type = 'asset' and doc.entity_id = a.id and doc.document_type = 'nota_fiscal' and doc.deleted_at is null order by doc.created_at desc limit 1) as nf_doc_id
      ${baseFrom}
      order by a.created_at desc
      limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
