@@ -265,6 +265,17 @@ export async function POST(request: Request) {
         const purchaseOrder = pick(row, ["Ordem de Compra", "OC", "Pedido"]);
         const notes = pick(row, ["Observações", "Observacoes", "Notas", "OBS", "Obs"]);
 
+        const processador = pick(row, ["Processador", "CPU"]);
+        const sistemaOperacional = pick(row, ["Sistema Operacional", "S.O.", "SO", "Sistema"]);
+        const hostname = pick(row, ["Nome da máquina", "Nome da maquina", "Hostname", "Nome de máquina", "Nome de maquina"]);
+
+        const technical: Record<string, string> = {};
+        if (processador) technical.processador = processador;
+        if (sistemaOperacional) technical.sistema_operacional = sistemaOperacional;
+        if (hostname) technical.hostname = hostname;
+
+        const technicalDataJson = Object.keys(technical).length ? JSON.stringify(technical) : null;
+
         // Duplicidade por série e patrimônio
         let isDuplicate = false;
         let dupInfo = "";
@@ -318,13 +329,13 @@ export async function POST(request: Request) {
           `insert into assets (tenant_id, category_id, name, serial_number, asset_tag, brand, model, location_id,
              current_employee_id, company_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
              replacement_status, status, internal_code, manufacturer, color, description, physical_condition,
-             invoice_number, purchase_order, notes)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+             invoice_number, purchase_order, notes, technical_data)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
           [
             t, catId, name, serial, tag, brand, model, locId, empId, companyId, acqDate, acqValue, usefulLife,
             replDate ? replDate.toISOString().slice(0, 10) : null,
             classifyReplacement(replDate), mappedStatus, internalCode, manufacturer, color, description, physicalCondition,
-            invoiceNumber, purchaseOrder, notes
+            invoiceNumber, purchaseOrder, notes, technicalDataJson
           ]
         );
         summary.assets.created++;

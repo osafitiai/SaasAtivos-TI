@@ -13,6 +13,9 @@ function generateSample() {
     "Numero de Serie",
     "Ano",
     "Situação",
+    "Processador",
+    "Sistema Operacional",
+    "Nome da máquina",
     "OBS"
   ];
 
@@ -27,6 +30,9 @@ function generateSample() {
       "Numero de Serie": "67CB7X3",
       "Ano": "2023",
       "Situação": "Boa",
+      "Processador": "Ryzen 5",
+      "Sistema Operacional": "Windows 11",
+      "Nome da máquina": "NTB-DANIELE",
       "OBS": "Sem observações"
     },
     {
@@ -39,6 +45,9 @@ function generateSample() {
       "Numero de Serie": "2C3CH73",
       "Ano": "2020",
       "Situação": "Boa",
+      "Processador": "Core i7",
+      "Sistema Operacional": "Ubuntu 22.04",
+      "Nome da máquina": "SRV-FELIPE",
       "OBS": "Teclado trocado"
     },
     {
@@ -51,6 +60,9 @@ function generateSample() {
       "Numero de Serie": "BDYKD53",
       "Ano": "2020",
       "Situação": "Critico",
+      "Processador": "Core i5",
+      "Sistema Operacional": "Windows 10",
+      "Nome da máquina": "NTB-ADRIANA",
       "OBS": "Diversos travamentos, máquina descontinuada"
     }
   ];

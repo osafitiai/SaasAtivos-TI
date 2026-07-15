@@ -58,6 +58,7 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
     department_id: str(formData.get("department_id")),
     location_id: str(formData.get("location_id")),
     supplier_id: str(formData.get("supplier_id")),
+    current_employee_id: str(formData.get("current_employee_id")),
     name,
     internal_code: str(formData.get("internal_code")),
     asset_tag: str(formData.get("asset_tag")),

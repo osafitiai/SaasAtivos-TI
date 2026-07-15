@@ -15,12 +15,12 @@ interface Options {
   departments: FieldOption[];
   locations: FieldOption[];
   suppliers: FieldOption[];
+  employees: FieldOption[];
 }
 
 const SECTIONS = [
   "Identificação",
   "Categoria e dados técnicos",
-  "Aquisição",
   "Localização e responsável",
   "Garantia",
   "Revisão",
@@ -31,6 +31,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [categoryId, setCategoryId] = useState(asset?.category_id ?? "");
+
+  const selectedCatLabel = options.categories.find((o) => o.value === categoryId)?.label || "";
   const tech = (asset?.technical_data ?? {}) as Record<string, string>;
 
   async function handleSubmit(formData: FormData) {
@@ -80,29 +83,17 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           <Field label="Nome do ativo" required span={2}>
             <input name="name" required defaultValue={asset?.name ?? ""} className="input" />
           </Field>
-          <Field label="Código interno">
-            <input name="internal_code" defaultValue={asset?.internal_code ?? ""} className="input" />
-          </Field>
           <Field label="Patrimônio">
             <input name="asset_tag" defaultValue={asset?.asset_tag ?? ""} className="input" />
           </Field>
           <Field label="Número de série">
             <input name="serial_number" defaultValue={asset?.serial_number ?? ""} className="input" />
           </Field>
-          <Field label="Etiqueta/QR">
-            <input name="etiqueta" defaultValue="" className="input" placeholder="opcional" />
-          </Field>
           <Field label="Marca">
             <input name="brand" defaultValue={asset?.brand ?? ""} className="input" />
           </Field>
           <Field label="Modelo">
             <input name="model" defaultValue={asset?.model ?? ""} className="input" />
-          </Field>
-          <Field label="Fabricante">
-            <input name="manufacturer" defaultValue={asset?.manufacturer ?? ""} className="input" />
-          </Field>
-          <Field label="Cor">
-            <input name="color" defaultValue={asset?.color ?? ""} className="input" />
           </Field>
           <Field label="Condição física">
             <select name="physical_condition" defaultValue={asset?.physical_condition ?? ""} className="input">
@@ -121,7 +112,13 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
       <Section active={step === 1}>
         <Grid>
           <Field label="Categoria" required>
-            <select name="category_id" required defaultValue={asset?.category_id ?? ""} className="input">
+            <select
+              name="category_id"
+              required
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="input"
+            >
               <option value="">— selecione —</option>
               {options.categories.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -132,68 +129,67 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
             <input name="useful_life_years" type="number" min="0" defaultValue={asset?.useful_life_years ?? ""} className="input" />
           </Field>
         </Grid>
-        <h4 className="mt-4 text-sm font-semibold text-slate-500">Dados técnicos</h4>
-        <Grid>
-          <TechField label="Processador" name="processador" tech={tech} />
-          <TechField label="Memória RAM" name="memoria_ram" tech={tech} />
-          <TechField label="Armazenamento" name="armazenamento" tech={tech} />
-          <TechField label="Sistema operacional" name="sistema_operacional" tech={tech} />
-          <TechField label="Hostname" name="hostname" tech={tech} />
-          <TechField label="IP" name="ip" tech={tech} />
-          <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
-          <TechField label="MAC Wi-Fi" name="mac_wifi" tech={tech} />
-          <TechField label="IMEI" name="imei" tech={tech} />
-          <TechField label="Número da linha" name="numero_linha" tech={tech} />
-          <TechField label="Operadora" name="operadora" tech={tech} />
-          <TechField label="Capacidade" name="capacidade" tech={tech} />
-          <TechField label="Tamanho (monitor)" name="tamanho" tech={tech} />
-          <TechField label="Resolução" name="resolucao" tech={tech} />
-          <TechField label="Nº de portas (switch)" name="portas" tech={tech} />
-          <TechField label="Estado da bateria" name="estado_bateria" tech={tech} />
-        </Grid>
+
+        {/* Exibição condicional de campos técnicos dependendo da categoria selecionada */}
+        {selectedCatLabel && (
+          <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <h4 className="mb-4 text-sm font-semibold text-slate-500">Dados técnicos do item</h4>
+            
+            {["notebook", "desktop", "servidor"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
+              <Grid>
+                <TechField label="Processador" name="processador" tech={tech} />
+                <TechField label="Memória RAM" name="memoria_ram" tech={tech} />
+                <TechField label="Armazenamento" name="armazenamento" tech={tech} />
+                <TechField label="Sistema operacional" name="sistema_operacional" tech={tech} />
+                <TechField label="Nome da máquina (Hostname)" name="hostname" tech={tech} />
+                <TechField label="IP" name="ip" tech={tech} />
+                <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
+                <TechField label="MAC Wi-Fi" name="mac_wifi" tech={tech} />
+              </Grid>
+            )}
+
+            {["monitor"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
+              <Grid>
+                <TechField label="Tamanho (polegadas)" name="tamanho" tech={tech} />
+                <TechField label="Resolução" name="resolucao" tech={tech} />
+              </Grid>
+            )}
+
+            {["smartphone", "tablet"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
+              <Grid>
+                <TechField label="IMEI" name="imei" tech={tech} />
+                <TechField label="Número da linha" name="numero_linha" tech={tech} />
+                <TechField label="Operadora" name="operadora" tech={tech} />
+                <TechField label="Capacidade" name="capacidade" tech={tech} />
+                <TechField label="Estado da bateria" name="estado_bateria" tech={tech} />
+              </Grid>
+            )}
+
+            {["switch", "roteador"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
+              <Grid>
+                <TechField label="Nº de portas" name="portas" tech={tech} />
+                <TechField label="IP" name="ip" tech={tech} />
+                <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
+              </Grid>
+            )}
+
+            {!["notebook", "desktop", "servidor", "monitor", "smartphone", "tablet", "switch", "roteador"].some(c => selectedCatLabel.toLowerCase().includes(c)) && (
+              <p className="text-xs text-slate-400">Esta categoria não possui campos técnicos específicos.</p>
+            )}
+          </div>
+        )}
       </Section>
 
       <Section active={step === 2}>
         <Grid>
-          <Field label="Fornecedor">
-            <select name="supplier_id" defaultValue={asset?.supplier_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.suppliers.map((o) => (
+          <Field label="Responsável atual">
+            <select name="current_employee_id" defaultValue={asset?.current_employee_id ?? ""} className="input">
+              <option value="">— Sem responsável —</option>
+              {options.employees.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </Field>
-          <Field label="Empresa compradora">
-            <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.companies.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Nº da nota fiscal">
-            <input name="invoice_number" defaultValue={asset?.invoice_number ?? ""} className="input" />
-          </Field>
-          <Field label="Chave da NF-e">
-            <input name="invoice_key" defaultValue={asset?.invoice_key ?? ""} className="input" />
-          </Field>
-          <Field label="Data da nota fiscal">
-            <input name="invoice_date" type="date" defaultValue={toDateInputValue(asset?.invoice_date)} className="input" />
-          </Field>
-          <Field label="Pedido de compra">
-            <input name="purchase_order" defaultValue={asset?.purchase_order ?? ""} className="input" />
-          </Field>
-          <Field label="Data de aquisição">
-            <input name="acquisition_date" type="date" defaultValue={toDateInputValue(asset?.acquisition_date)} className="input" />
-          </Field>
-          <Field label="Valor de aquisição (BRL)">
-            <input name="acquisition_value" type="number" step="0.01" min="0" defaultValue={asset?.acquisition_value ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 3}>
-        <Grid>
           <Field label="Filial">
             <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
               <option value="">— selecione —</option>
@@ -226,12 +222,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
             </select>
           </Field>
         </Grid>
-        <p className="mt-2 text-xs text-slate-400">
-          A associação a um colaborador é feita pela ação “Movimentar” após salvar o ativo, garantindo o histórico.
-        </p>
       </Section>
 
-      <Section active={step === 4}>
+      <Section active={step === 3}>
         <Grid>
           <Field label="Início da garantia">
             <input name="warranty_start_date" type="date" defaultValue={toDateInputValue(asset?.warranty_start_date)} className="input" />
@@ -245,10 +238,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
         </Grid>
       </Section>
 
-      <Section active={step === 5}>
+      <Section active={step === 4}>
         <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
-          Revise os dados nas abas anteriores. A <strong>previsão de substituição</strong> é calculada
-          automaticamente a partir da data de aquisição somada à vida útil. Clique em salvar para concluir.
+          Revise os dados nas abas anteriores e clique em salvar para concluir o cadastro ou edição do ativo.
         </div>
       </Section>
 
@@ -298,16 +290,16 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className={span === 2 ? "sm:col-span-2" : ""}>
+    <div className={span ? `sm:col-span-${span}` : ""}>
       <label className="label">
-        {label}
-        {required && <span className="text-red-500"> *</span>}
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
-      {help && <p className="mt-1 text-xs text-slate-400">{help}</p>}
+      {help && <p className="mt-1 text-[11px] text-slate-400">{help}</p>}
     </div>
   );
 }
+
 function TechField({ label, name, tech }: { label: string; name: string; tech: Record<string, string> }) {
   return (
     <Field label={label}>

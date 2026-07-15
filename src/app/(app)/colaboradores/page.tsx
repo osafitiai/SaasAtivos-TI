@@ -52,7 +52,7 @@ export default async function ColaboradoresPage() {
 
   const rows = await query(
     `select e.*, d.name as department_name, coalesce(c.trade_name,c.legal_name) as company_name,
-            (select count(*) from asset_assignments aa where aa.employee_id = e.id and aa.ended_at is null)::int as assets_count,
+            (select count(*) from assets a where a.current_employee_id = e.id and a.deleted_at is null)::int as assets_count,
             (select coalesce(sum(a.acquisition_value),0) from assets a where a.current_employee_id = e.id and a.deleted_at is null) as assets_value
        from employees e
        left join departments d on d.id = e.department_id
