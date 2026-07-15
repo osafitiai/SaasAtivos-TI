@@ -32,6 +32,7 @@ export default async function AtivosPage({
   const status = sp.status || "";
   const category = sp.category || "";
   const repl = sp.repl || "";
+  const group = sp.group || "";
 
   const where: string[] = ["a.tenant_id = $1", "a.deleted_at is null"];
   const params: unknown[] = [user.tenant_id];
@@ -50,6 +51,17 @@ export default async function AtivosPage({
   if (category) {
     params.push(category);
     where.push(`a.category_id = $${params.length}`);
+  }
+  if (group) {
+    if (group === "computadores") {
+      where.push(`(c.name ilike '%notebook%' or c.name ilike '%computador%')`);
+    } else if (group === "monitores") {
+      where.push(`c.name ilike '%monitor%'`);
+    } else if (group === "impressoras") {
+      where.push(`c.name ilike '%impressora%'`);
+    } else if (group === "perifericos") {
+      where.push(`(c.name ilike '%teclado%' or c.name ilike '%mouse%' or c.name ilike '%headset%' or c.name ilike '%periferico%' or c.name ilike '%fone%')`);
+    }
   }
   if (repl === "vencido") where.push(`${REPL_EXPR} < current_date`);
   if (repl === "urgente")
@@ -85,7 +97,7 @@ export default async function AtivosPage({
   ]);
 
   const exportQs = new URLSearchParams(
-    Object.entries({ q, status, category, repl }).filter(([, v]) => v) as [string, string][]
+    Object.entries({ q, status, category, repl, group }).filter(([, v]) => v) as [string, string][]
   ).toString();
 
   return (
