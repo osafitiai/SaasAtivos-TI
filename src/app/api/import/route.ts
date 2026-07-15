@@ -85,7 +85,12 @@ export async function POST(request: Request) {
 
   function sheet(nameIncludes: string): Record<string, unknown>[] {
     const name = wb.SheetNames.find((n) => norm(n).includes(norm(nameIncludes)));
-    if (!name) return [];
+    if (!name) {
+      if (nameIncludes === "ativo" && wb.SheetNames.length > 0) {
+        return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+      }
+      return [];
+    }
     return XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: null });
   }
 
@@ -93,11 +98,12 @@ export async function POST(request: Request) {
     await transaction(async (client: PoolClient) => {
       const t = user.tenant_id;
 
-      // Cache de departamentos, categorias, localizações, colaboradores
+      // Cache de departamentos, categorias, localizações, colaboradores, empresas
       const deptCache = new Map<string, string>();
       const catCache = new Map<string, string>();
       const locCache = new Map<string, string>();
       const empCache = new Map<string, string>();
+      const companyCache = new Map<string, string>();
 
       async function ensureDept(name: string | null): Promise<string | null> {
         if (!name) return null;
@@ -168,6 +174,25 @@ export async function POST(request: Request) {
         if (id) empCache.set(key, id);
         return id;
       }
+      async function ensureCompany(name: string | null): Promise<string | null> {
+        if (!name) return null;
+        const key = norm(name);
+        if (companyCache.has(key)) return companyCache.get(key)!;
+        const ex = await client.query<{ id: string }>(
+          "select id from companies where tenant_id=$1 and (lower(trade_name)=lower($2) or lower(legal_name)=lower($2)) limit 1",
+          [t, name]
+        );
+        let id = ex.rows[0]?.id;
+        if (!id) {
+          const ins = await client.query<{ id: string }>(
+            "insert into companies (tenant_id, trade_name, legal_name, status) values ($1,$2,$2,'active') returning id",
+            [t, name]
+          );
+          id = ins.rows[0].id;
+        }
+        companyCache.set(key, id);
+        return id;
+      }
 
       // 1. Colaboradores
       for (const row of sheet("colaborador")) {
@@ -203,24 +228,42 @@ export async function POST(request: Request) {
         if (!name) continue;
         const serial = pick(row, ["Nº de Série", "Numero de Serie", "Série", "Serie"]);
         const tag = pick(row, ["Patrimônio", "Patrimonio", "Tag"]);
-        const category = pick(row, ["Categoria"]);
-        const brand = pick(row, ["Marca"]);
+        const category = pick(row, ["Categoria"]) || pick(row, ["Equipamento"]);
+        let brand = pick(row, ["Marca"]);
         const model = pick(row, ["Modelo"]);
+        if (!brand && model) {
+          const firstWord = model.split(" ")[0];
+          const commonBrands = ["dell", "hp", "lenovo", "apple", "asus", "acer", "samsung", "lg", "positivo", "intelbras", "xiaomi", "microsoft"];
+          if (commonBrands.includes(firstWord.toLowerCase())) {
+            brand = firstWord.toUpperCase();
+          }
+        }
         const loc = pick(row, ["Localização", "Localizacao"]);
-        const respName = pick(row, ["Responsável", "Responsavel", "Usuário", "Usuario"]);
-        const acqDate = parseDate(pick(row, ["Data de Aquisição", "Aquisicao", "Aquisição"]));
+        const respName = pick(row, ["Responsável", "Responsavel", "Usuário", "Usuario", "User"]);
+        const companyName = pick(row, ["Coligada", "Empresa", "Companhia"]);
+        const companyId = await ensureCompany(companyName);
+        const acqDate = parseDate(pick(row, ["Data de Aquisição", "Aquisicao", "Aquisição", "Ano"]));
         const acqValue = parseMoney(pick(row, ["Valor de Aquisição", "Valor"]));
         const usefulLife = Number(pick(row, ["Vida Útil", "Vida Util"]) || "") || null;
-        const status = pick(row, ["Status"]) || "Disponível";
+        const status = pick(row, ["Status", "Situação", "Situacao"]) || "Disponível";
 
         const internalCode = pick(row, ["Código Interno", "Codigo Interno", "Código", "Codigo", "Cod"]);
         const manufacturer = pick(row, ["Fabricante"]);
         const color = pick(row, ["Cor"]);
         const description = pick(row, ["Descrição", "Descricao"]);
-        const physicalCondition = pick(row, ["Estado", "Conservação", "Conservacao", "Condição", "Condicao"]);
+        let physicalCondition = pick(row, ["Estado", "Conservação", "Conservacao", "Condição", "Condicao", "Situação", "Situacao"]);
+        if (physicalCondition) {
+          const pcLower = physicalCondition.toLowerCase();
+          if (pcLower.includes("boa") || pcLower.includes("bom")) physicalCondition = "Bom";
+          else if (pcLower.includes("regular") || pcLower.includes("aten")) physicalCondition = "Regular";
+          else if (pcLower.includes("criti") || pcLower.includes("ruim")) physicalCondition = "Ruim";
+          else if (pcLower.includes("novo")) physicalCondition = "Novo";
+          else if (pcLower.includes("excelente")) physicalCondition = "Excelente";
+          else if (pcLower.includes("irrecu")) physicalCondition = "Irrecuperável";
+        }
         const invoiceNumber = pick(row, ["Nota Fiscal", "NF", "Número da Nota", "Numero da Nota"]);
         const purchaseOrder = pick(row, ["Ordem de Compra", "OC", "Pedido"]);
-        const notes = pick(row, ["Observações", "Observacoes", "Notas"]);
+        const notes = pick(row, ["Observações", "Observacoes", "Notas", "OBS", "Obs"]);
 
         // Duplicidade por série e patrimônio
         let isDuplicate = false;
@@ -254,18 +297,31 @@ export async function POST(request: Request) {
 
         const catId = await ensureCat(category);
         const locId = await ensureLoc(loc);
-        const empId = await findEmp(respName);
+        
+        let empId = await findEmp(respName);
+        if (!empId && respName) {
+          const dept = pick(row, ["Departamento", "Setor"]);
+          const deptId = await ensureDept(dept);
+          const ins = await client.query<{ id: string }>(
+            "insert into employees (tenant_id, full_name, department_id, status) values ($1,$2,$3,'Ativo') returning id",
+            [t, respName, deptId]
+          );
+          empId = ins.rows[0].id;
+          empCache.set(norm(respName), empId);
+          summary.employees.created++;
+        }
+
         const replDate = computeReplacementDate(acqDate, usefulLife);
-        const mappedStatus = norm(status) === "ativo" ? (empId ? "Em uso" : "Disponível") : status;
+        const mappedStatus = norm(status) === "ativo" || norm(status) === "boa" ? (empId ? "Em uso" : "Disponível") : status;
 
         await client.query(
           `insert into assets (tenant_id, category_id, name, serial_number, asset_tag, brand, model, location_id,
-             current_employee_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
+             current_employee_id, company_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
              replacement_status, status, internal_code, manufacturer, color, description, physical_condition,
              invoice_number, purchase_order, notes)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
           [
-            t, catId, name, serial, tag, brand, model, locId, empId, acqDate, acqValue, usefulLife,
+            t, catId, name, serial, tag, brand, model, locId, empId, companyId, acqDate, acqValue, usefulLife,
             replDate ? replDate.toISOString().slice(0, 10) : null,
             classifyReplacement(replDate), mappedStatus, internalCode, manufacturer, color, description, physicalCondition,
             invoiceNumber, purchaseOrder, notes

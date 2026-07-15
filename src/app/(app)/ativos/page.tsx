@@ -103,9 +103,14 @@ export default async function AtivosPage({
               ⬇ Exportar XLSX
             </a>
             {canEdit && (
-              <Link href="/ativos/novo" className="btn-primary">
-                + Novo ativo
-              </Link>
+              <>
+                <Link href="/administracao/importacao" className="btn-secondary">
+                  📥 Importar Planilha
+                </Link>
+                <Link href="/ativos/novo" className="btn-primary">
+                  + Novo ativo
+                </Link>
+              </>
             )}
           </>
         }
