@@ -124,6 +124,18 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
       revalidatePath("/ativos");
     }
 
+    const prevEmpId = str(formData.get("previous_employee_id"));
+    if (prevEmpId && assetId) {
+      const prevDate = str(formData.get("previous_date")) || new Date().toISOString();
+      const prevReason = str(formData.get("previous_reason")) || "Histórico de uso anterior adicionado manualmente";
+      await pool.query(
+        `insert into asset_movements
+          (tenant_id, asset_id, movement_type, to_employee_id, occurred_at, reason, performed_by_user_id)
+         values ($1, $2, 'Uso anterior', $3, $4, $5, $6)`,
+        [user.tenant_id, assetId, prevEmpId, prevDate, prevReason, user.id]
+      );
+    }
+
     if (invoiceFile && invoiceFile.name && invoiceFile.size > 0 && assetId) {
       const bytes = Buffer.from(await invoiceFile.arrayBuffer());
       const storagePath = await storeFile(user.tenant_id!, invoiceFile.name, bytes, invoiceFile.type);

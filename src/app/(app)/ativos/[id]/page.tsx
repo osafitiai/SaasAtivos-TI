@@ -315,6 +315,45 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
     </div>
   );
 
+  const previousCollaborators = movements.filter((m) => m.to_employee_id);
+
+  const colaboradoresAnterioresTab = (
+    <div className="card overflow-x-auto">
+      {previousCollaborators.length === 0 ? (
+        <p className="p-5 text-sm text-slate-400">Nenhum colaborador anterior registrado.</p>
+      ) : (
+        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/50">
+            <tr>
+              <th className="table-th">Colaborador</th>
+              <th className="table-th">Data de Associação</th>
+              <th className="table-th">Tipo</th>
+              <th className="table-th">Motivo</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {previousCollaborators.map((m) => (
+              <tr key={m.id}>
+                <td className="table-td font-medium text-slate-900 dark:text-slate-100">
+                  {m.to_employee_name}
+                </td>
+                <td className="table-td text-slate-500">
+                  {formatDateTime(m.occurred_at)}
+                </td>
+                <td className="table-td text-slate-500">
+                  {m.movement_type}
+                </td>
+                <td className="table-td text-slate-500">
+                  {m.reason || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
   const auditoriaTab = (
     <div className="card overflow-hidden">
       {audit.length === 0 ? (
@@ -357,6 +396,7 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
           { label: "Resumo", content: resumo },
           { label: "Dados técnicos", content: dadosTecnicos },
           { label: "Responsável e localização", content: responsavel },
+          { label: "Colaboradores anteriores", content: colaboradoresAnterioresTab },
           { label: `Movimentações (${movements.length})`, content: movimentacoesTab },
           { label: `Manutenções (${maintenances.length})`, content: manutencoesTab },
           {

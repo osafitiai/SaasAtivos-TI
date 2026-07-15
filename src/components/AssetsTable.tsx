@@ -29,6 +29,7 @@ export function AssetsTable({
   const router = useRouter();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const allSelected = rows.length > 0 && selectedIds.length === rows.length;
 
@@ -66,12 +67,19 @@ export function AssetsTable({
       alert(res.error);
     } else {
       setSelectedIds([]);
+      setSuccessMsg("Ativos excluídos com sucesso!");
       router.refresh();
+      setTimeout(() => setSuccessMsg(null), 3000);
     }
   };
 
   return (
     <div className="space-y-3">
+      {successMsg && (
+        <div className="mb-4 rounded-lg bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 dark:bg-green-950/20 dark:text-green-300 transition duration-150">
+          {successMsg}
+        </div>
+      )}
       {/* Barra de ações em lote */}
       {selectedIds.length > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/20 dark:text-red-300">
@@ -192,6 +200,9 @@ export function AssetsTable({
                             setSelectedIds((prev) =>
                               prev.filter((id) => id !== a.id)
                             );
+                            setSuccessMsg(`Ativo "${a.name}" excluído com sucesso!`);
+                            router.refresh();
+                            setTimeout(() => setSuccessMsg(null), 3000);
                           }}
                           className="btn-ghost px-2 py-1 text-xs text-red-600"
                           message={`Deseja excluir "${a.name}"? O ativo sai da lista, mas o histórico é preservado.`}

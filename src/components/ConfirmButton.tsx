@@ -38,6 +38,8 @@ export function ConfirmButton({
                 action={async () => {
                   setPending(true);
                   await action();
+                  setPending(false);
+                  setOpen(false);
                 }}
               >
                 {hidden &&

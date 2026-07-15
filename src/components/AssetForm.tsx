@@ -605,6 +605,35 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
             </div>
           )}
 
+          {asset && (
+            <div className="card p-4 border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
+              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Registrar Uso/Colaborador Anterior (Histórico)
+              </h4>
+              <p className="text-xs text-slate-400">
+                Selecione um colaborador que já usou este equipamento no passado para registrar no histórico de movimentações.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <Field label="Colaborador">
+                  <select name="previous_employee_id" className="input">
+                    <option value="">— selecione o colaborador —</option>
+                    {options.employees.map((e) => (
+                      <option key={e.value} value={e.value}>
+                        {e.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Data de Uso (Opcional)">
+                  <input type="date" name="previous_date" className="input" />
+                </Field>
+                <Field label="Motivo/Observação (Opcional)">
+                  <input type="text" name="previous_reason" placeholder="Ex: Devolução antiga" className="input" />
+                </Field>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
             <button
               type="submit"
