@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 
 interface NavItem {
   href: string;
@@ -25,7 +25,7 @@ const NAV: NavItem[] = [
   { href: "/auditoria", label: "Auditoria", icon: "🛡️" },
 ];
 
-export function Sidebar() {
+function SidebarContent() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -159,5 +159,13 @@ export function Sidebar() {
         </nav>
       </aside>
     </>
+  );
+}
+
+export function Sidebar() {
+  return (
+    <Suspense fallback={<div className="fixed inset-y-0 left-0 w-64 border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900" />}>
+      <SidebarContent />
+    </Suspense>
   );
 }
