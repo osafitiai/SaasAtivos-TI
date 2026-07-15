@@ -175,6 +175,10 @@ export async function POST(request: Request) {
         if (!name) continue;
         const email = pick(row, ["E-mail", "Email"]);
         const dept = pick(row, ["Departamento", "Setor"]);
+        const registrationNumber = pick(row, ["Matrícula", "Matricula", "Registro"]);
+        const jobTitle = pick(row, ["Cargo", "Função", "Funcao"]);
+        const phone = pick(row, ["Telefone", "Celular", "Fone"]);
+
         const existing = await client.query<{ id: string }>(
           "select id from employees where tenant_id=$1 and (lower(full_name)=lower($2) or (email is not null and lower(email)=lower($3))) limit 1",
           [t, name, email ?? ""]
@@ -186,8 +190,8 @@ export async function POST(request: Request) {
         }
         const deptId = await ensureDept(dept);
         const ins = await client.query<{ id: string }>(
-          "insert into employees (tenant_id, full_name, email, department_id, status) values ($1,$2,$3,$4,'Ativo') returning id",
-          [t, name, email, deptId]
+          "insert into employees (tenant_id, full_name, email, department_id, registration_number, job_title, phone, status) values ($1,$2,$3,$4,$5,$6,$7,'Ativo') returning id",
+          [t, name, email, deptId, registrationNumber, jobTitle, phone]
         );
         empCache.set(norm(name), ins.rows[0].id);
         summary.employees.created++;
@@ -197,7 +201,8 @@ export async function POST(request: Request) {
       for (const row of sheet("ativo")) {
         const name = pick(row, ["Nome do Equipamento", "Nome do Ativo", "Equipamento", "Nome"]);
         if (!name) continue;
-        const serial = pick(row, ["Nº de Série", "Numero de Serie", "Série", "Serie", "Patrimônio", "Patrimonio"]);
+        const serial = pick(row, ["Nº de Série", "Numero de Serie", "Série", "Serie"]);
+        const tag = pick(row, ["Patrimônio", "Patrimonio", "Tag"]);
         const category = pick(row, ["Categoria"]);
         const brand = pick(row, ["Marca"]);
         const model = pick(row, ["Modelo"]);
@@ -208,17 +213,43 @@ export async function POST(request: Request) {
         const usefulLife = Number(pick(row, ["Vida Útil", "Vida Util"]) || "") || null;
         const status = pick(row, ["Status"]) || "Disponível";
 
-        // Duplicidade por série/patrimônio
+        const internalCode = pick(row, ["Código Interno", "Codigo Interno", "Código", "Codigo", "Cod"]);
+        const manufacturer = pick(row, ["Fabricante"]);
+        const color = pick(row, ["Cor"]);
+        const description = pick(row, ["Descrição", "Descricao"]);
+        const physicalCondition = pick(row, ["Estado", "Conservação", "Conservacao", "Condição", "Condicao"]);
+        const invoiceNumber = pick(row, ["Nota Fiscal", "NF", "Número da Nota", "Numero da Nota"]);
+        const purchaseOrder = pick(row, ["Ordem de Compra", "OC", "Pedido"]);
+        const notes = pick(row, ["Observações", "Observacoes", "Notas"]);
+
+        // Duplicidade por série e patrimônio
+        let isDuplicate = false;
+        let dupInfo = "";
         if (serial) {
-          const dup = await client.query(
-            "select id from assets where tenant_id=$1 and (serial_number=$2 or asset_tag=$2) and deleted_at is null limit 1",
+          const dupSerial = await client.query(
+            "select id from assets where tenant_id=$1 and serial_number=$2 and deleted_at is null limit 1",
             [t, serial]
           );
-          if (dup.rows[0]) {
-            summary.assets.skipped++;
-            summary.assets.duplicates.push(`${name} (${serial})`);
-            continue;
+          if (dupSerial.rows[0]) {
+            isDuplicate = true;
+            dupInfo = `Série: ${serial}`;
           }
+        }
+        if (!isDuplicate && tag) {
+          const dupTag = await client.query(
+            "select id from assets where tenant_id=$1 and asset_tag=$2 and deleted_at is null limit 1",
+            [t, tag]
+          );
+          if (dupTag.rows[0]) {
+            isDuplicate = true;
+            dupInfo = `Patrimônio: ${tag}`;
+          }
+        }
+
+        if (isDuplicate) {
+          summary.assets.skipped++;
+          summary.assets.duplicates.push(`${name} (${dupInfo})`);
+          continue;
         }
 
         const catId = await ensureCat(category);
@@ -228,14 +259,16 @@ export async function POST(request: Request) {
         const mappedStatus = norm(status) === "ativo" ? (empId ? "Em uso" : "Disponível") : status;
 
         await client.query(
-          `insert into assets (tenant_id, category_id, name, serial_number, brand, model, location_id,
+          `insert into assets (tenant_id, category_id, name, serial_number, asset_tag, brand, model, location_id,
              current_employee_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
-             replacement_status, status)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+             replacement_status, status, internal_code, manufacturer, color, description, physical_condition,
+             invoice_number, purchase_order, notes)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
           [
-            t, catId, name, serial, brand, model, locId, empId, acqDate, acqValue, usefulLife,
+            t, catId, name, serial, tag, brand, model, locId, empId, acqDate, acqValue, usefulLife,
             replDate ? replDate.toISOString().slice(0, 10) : null,
-            classifyReplacement(replDate), mappedStatus,
+            classifyReplacement(replDate), mappedStatus, internalCode, manufacturer, color, description, physicalCondition,
+            invoiceNumber, purchaseOrder, notes
           ]
         );
         summary.assets.created++;
@@ -258,8 +291,8 @@ export async function POST(request: Request) {
 
         await client.query(
           `insert into maintenances (tenant_id, asset_id, type, status, problem_description, total_cost, service_cost, opened_at, completed_at)
-           values ($1,$2,$3,$4,$5,$6,$6,$7,$8)`,
-          [t, asset.rows[0].id, type, mStatus, desc, cost, date || new Date().toISOString(), mStatus === "Concluída" ? (date || new Date().toISOString()) : null]
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [t, asset.rows[0].id, type, mStatus, desc, cost, cost, date || new Date().toISOString(), mStatus === "Concluída" ? (date || new Date().toISOString()) : null]
         );
         summary.maintenances.created++;
       }

@@ -154,12 +154,11 @@ export default async function AtivosPage({
               <tr>
                 <th className="table-th">Ativo</th>
                 <th className="table-th">Categoria</th>
-                <th className="table-th">Patrimônio / Série</th>
+                <th className="table-th">Patrimônio</th>
+                <th className="table-th">Nº Série</th>
                 <th className="table-th">Responsável</th>
                 <th className="table-th">Localização</th>
                 <th className="table-th">Status</th>
-                <th className="table-th">Substituição</th>
-                {showMoney && <th className="table-th">Valor</th>}
                 <th className="table-th text-right">Ações</th>
               </tr>
             </thead>
@@ -173,15 +172,11 @@ export default async function AtivosPage({
                     <div className="text-xs text-slate-400">{a.brand} {a.model}</div>
                   </td>
                   <td className="table-td">{a.category_name}</td>
-                  <td className="table-td">{a.asset_tag || a.serial_number || "—"}</td>
+                  <td className="table-td">{a.asset_tag || "—"}</td>
+                  <td className="table-td">{a.serial_number || "—"}</td>
                   <td className="table-td">{a.employee_name || <span className="text-slate-400">—</span>}</td>
                   <td className="table-td">{a.location_name || "—"}</td>
                   <td className="table-td"><AssetStatusBadge status={a.status} /></td>
-                  <td className="table-td">
-                    <ReplacementBadge date={a.replacement_date} />
-                    <div className="text-xs text-slate-400">{formatDate(a.replacement_date)}</div>
-                  </td>
-                  {showMoney && <td className="table-td">{formatBRL(a.acquisition_value)}</td>}
                   <td className="table-td text-right">
                     <div className="flex justify-end gap-1">
                       {canEdit && (
