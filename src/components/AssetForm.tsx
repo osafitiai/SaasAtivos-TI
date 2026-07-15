@@ -26,7 +26,10 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
   const [locations, setLocations] = useState(options.locations);
   const [selectedLoc, setSelectedLoc] = useState(asset?.location_id ?? "");
 
-  const selectedCatLabel = options.categories.find((o) => o.value === categoryId)?.label || "";
+  const filteredCategories = options.categories.filter(
+    (c) => !options.employees.some((e) => e.label.toLowerCase() === c.label.toLowerCase())
+  );
+  const selectedCatLabel = filteredCategories.find((o) => o.value === categoryId)?.label || "";
   const catLower = selectedCatLabel.toLowerCase();
 
   const isNotebook = catLower.includes("notebook");
@@ -129,7 +132,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           className="input mt-1"
         >
           <option value="">— selecione a categoria —</option>
-          {options.categories.map((o) => (
+          {filteredCategories.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
