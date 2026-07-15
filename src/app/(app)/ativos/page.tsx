@@ -73,7 +73,8 @@ export default async function AtivosPage({
 
   const rows = await query<Asset>(
     `select a.*, c.name as category_name, c.icon as category_icon,
-            e.full_name as employee_name, l.name as location_name, d.name as department_name
+            e.full_name as employee_name, l.name as location_name, d.name as department_name,
+            (select d.id from documents d where d.entity_type = 'asset' and d.entity_id = a.id and d.document_type = 'nota_fiscal' and d.deleted_at is null order by d.created_at desc limit 1) as nf_doc_id
      ${baseFrom}
      order by a.created_at desc
      limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,
@@ -158,7 +159,8 @@ export default async function AtivosPage({
                 <th className="table-th">Nº Série</th>
                 <th className="table-th">Responsável</th>
                 <th className="table-th">Localização</th>
-                <th className="table-th">Status</th>
+                 <th className="table-th">Status</th>
+                <th className="table-th">NF</th>
                 <th className="table-th text-right">Ações</th>
               </tr>
             </thead>
@@ -177,6 +179,15 @@ export default async function AtivosPage({
                   <td className="table-td">{a.employee_name || <span className="text-slate-400">—</span>}</td>
                   <td className="table-td">{a.location_name || "—"}</td>
                   <td className="table-td"><AssetStatusBadge status={a.status} /></td>
+                  <td className="table-td">
+                    {a.nf_doc_id ? (
+                      <a href={`/api/documents/${a.nf_doc_id}`} className="text-brand-600 hover:underline inline-flex items-center gap-1 font-medium" title="Baixar Nota Fiscal">
+                        📄 NF
+                      </a>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="table-td text-right">
                     <div className="flex justify-end gap-1">
                       {canEdit && (

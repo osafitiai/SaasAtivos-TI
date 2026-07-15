@@ -180,6 +180,7 @@ export interface Asset {
   department_name?: string;
   company_name?: string;
   supplier_name?: string;
+  nf_doc_id?: string | null;
 }
 
 export interface AssetMovement {
