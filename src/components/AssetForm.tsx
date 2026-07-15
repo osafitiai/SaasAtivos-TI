@@ -39,8 +39,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
 
   const tech = (asset?.technical_data ?? {}) as Record<string, string>;
 
-  // Apenas notebook tem duas abas. Os outros têm apenas "Identificação"
-  const tabs = isNotebook ? ["Identificação", "Dados técnicos"] : ["Identificação"];
+  const steps: string[] = ["Identificação"];
+  if (isNotebook) steps.push("Dados técnicos");
+  steps.push("Aquisição");
 
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
@@ -143,9 +144,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
       {categoryId && (
         <>
           {/* Abas dinâmicas se houver mais de uma */}
-          {tabs.length > 1 && (
+          {steps.length > 1 && (
             <div className="flex gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
-              {tabs.map((t, idx) => (
+              {steps.map((t, idx) => (
                 <button
                   key={t}
                   type="button"
@@ -163,7 +164,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           )}
 
           {/* ABA 1: Identificação (Comum para todos, mas campos variam) */}
-          {step === 0 && (
+          {steps[step] === "Identificação" && (
             <div className="card p-6">
               <Grid>
                 {/* 1. Notebook Form */}
@@ -236,22 +237,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
-                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
-                      <input
-                        type="file"
-                        name="invoice_file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="input"
-                      />
-                    </Field>
-                    <Field label="Observações" span={2}>
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={asset?.notes ?? ""}
-                        className="input"
-                      />
-                    </Field>
+
                   </>
                 )}
 
@@ -317,22 +303,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
-                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
-                      <input
-                        type="file"
-                        name="invoice_file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="input"
-                      />
-                    </Field>
-                    <Field label="Observações" span={2}>
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={asset?.notes ?? ""}
-                        className="input"
-                      />
-                    </Field>
+
                   </>
                 )}
 
@@ -395,22 +366,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
-                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
-                      <input
-                        type="file"
-                        name="invoice_file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="input"
-                      />
-                    </Field>
-                    <Field label="Observações" span={2}>
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={asset?.notes ?? ""}
-                        className="input"
-                      />
-                    </Field>
+
                   </>
                 )}
 
@@ -465,22 +421,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
-                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
-                      <input
-                        type="file"
-                        name="invoice_file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="input"
-                      />
-                    </Field>
-                    <Field label="Observações" span={2}>
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={asset?.notes ?? ""}
-                        className="input"
-                      />
-                    </Field>
+
                   </>
                 )}
 
@@ -540,22 +481,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
-                    <Field label="Nota fiscal da compra (PDF, JPG, PNG)">
-                      <input
-                        type="file"
-                        name="invoice_file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="input"
-                      />
-                    </Field>
-                    <Field label="Observações" span={2}>
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={asset?.notes ?? ""}
-                        className="input"
-                      />
-                    </Field>
+
                   </>
                 )}
               </Grid>
@@ -563,7 +489,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           )}
 
           {/* ABA 2: Dados técnicos (Apenas para notebook) */}
-          {step === 1 && isNotebook && (
+          {steps[step] === "Dados técnicos" && isNotebook && (
             <div className="card p-6">
               <Grid>
                 <Field label="Processador">
@@ -598,6 +524,88 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                   <input
                     name="tech_chave_licenca_windows"
                     defaultValue={tech.chave_licenca_windows ?? ""}
+                    className="input"
+                  />
+                </Field>
+              </Grid>
+            </div>
+          )}
+
+          {steps[step] === "Aquisição" && (
+            <div className="card p-6">
+              <Grid>
+                <Field label="Fornecedor">
+                  <select name="supplier_id" defaultValue={asset?.supplier_id ?? ""} className="input">
+                    <option value="">— selecione o fornecedor —</option>
+                    {options.suppliers.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Nº da nota fiscal">
+                  <input
+                    type="text"
+                    name="invoice_number"
+                    defaultValue={asset?.invoice_number ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Chave da NF-e">
+                  <input
+                    type="text"
+                    name="invoice_key"
+                    defaultValue={asset?.invoice_key ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Data da nota fiscal">
+                  <input
+                    type="date"
+                    name="invoice_date"
+                    defaultValue={asset?.invoice_date ? String(asset.invoice_date).slice(0, 10) : ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="OC da compra / Pedido de compra">
+                  <input
+                    type="text"
+                    name="purchase_order"
+                    defaultValue={asset?.purchase_order ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Data de aquisição / compra">
+                  <input
+                    type="date"
+                    name="acquisition_date"
+                    defaultValue={asset?.acquisition_date ? String(asset.acquisition_date).slice(0, 10) : ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Valor de aquisição / produto (BRL)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="acquisition_value"
+                    defaultValue={asset?.acquisition_value ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Anexar arquivo da Nota Fiscal (PDF, JPG, PNG)">
+                  <input
+                    type="file"
+                    name="invoice_file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="input"
+                  />
+                </Field>
+                <Field label="Observações" span={2}>
+                  <textarea
+                    name="notes"
+                    rows={4}
+                    defaultValue={asset?.notes ?? ""}
                     className="input"
                   />
                 </Field>
