@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { queryOne } from "./db";
@@ -102,7 +103,6 @@ export async function getSession(): Promise<SessionUser | null> {
 export async function requireSession(): Promise<SessionUser> {
   const session = await getSession();
   if (!session) {
-    const { redirect } = await import("next/navigation");
     redirect("/login");
   }
   return session!;
