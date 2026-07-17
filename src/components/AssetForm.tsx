@@ -25,6 +25,33 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
   const [pending, setPending] = useState(false);
   const [locations, setLocations] = useState(options.locations);
   const [selectedLoc, setSelectedLoc] = useState(asset?.location_id ?? "");
+  const [previousUsers, setPreviousUsers] = useState<{
+    id: string;
+    employeeId: string;
+    date: string;
+    reason: string;
+  }[]>([]);
+
+  const addPreviousUser = () => {
+    setPreviousUsers((prev) => [
+      ...prev,
+      { id: Math.random().toString(), employeeId: "", date: "", reason: "" },
+    ]);
+  };
+
+  const removePreviousUser = (id: string) => {
+    setPreviousUsers((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updatePreviousUser = (
+    id: string,
+    field: "employeeId" | "date" | "reason",
+    value: string
+  ) => {
+    setPreviousUsers((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
 
   const filteredCategories = options.categories.filter(
     (c) => !options.employees.some((e) => e.label.toLowerCase() === c.label.toLowerCase())
@@ -98,6 +125,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
       return;
     }
     setSuccess("Ativo salvo com sucesso!");
+    setPreviousUsers([]);
     setTimeout(() => {
       router.push(res.id ? `/ativos/${res.id}` : "/ativos");
       router.refresh();
@@ -614,33 +642,91 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           )}
 
           {asset && (
-            <div className="card p-4 border border-dashed border-slate-200 dark:border-slate-800 space-y-3">
-              <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Registrar Uso/Colaborador Anterior (Histórico)
-              </h4>
-              <p className="text-xs text-slate-400">
-                Selecione um colaborador que já usou este equipamento no passado para registrar no histórico de movimentações.
-              </p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <Field label="Colaborador">
-                  <select name="previous_employee_id" className="input">
-                    <option value="">— selecione o colaborador —</option>
-                    {options.employees.map((e) => (
-                      <option key={e.value} value={e.value}>
-                        {e.label}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Data de Uso (Opcional)">
-                  <input type="date" name="previous_date" className="input" />
-                </Field>
-                <Field label="Motivo/Observação (Opcional)">
-                  <input type="text" name="previous_reason" placeholder="Ex: Devolução antiga" className="input" />
-                </Field>
+            <div className="card p-4 border border-dashed border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Registrar Uso/Colaborador Anterior (Histórico)
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Selecione um ou mais colaboradores que já usaram este equipamento no passado.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addPreviousUser}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 border border-slate-200 dark:border-slate-700 transition-colors"
+                >
+                  ➕ Adicionar
+                </button>
               </div>
+
+              {previousUsers.length === 0 ? (
+                <p className="text-xs text-slate-500 italic py-2">
+                  Nenhum colaborador anterior adicionado para registro nesta alteração. Clique em "Adicionar" para registrar uso anterior.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {previousUsers.map((item) => (
+                    <div key={item.id} className="grid grid-cols-1 gap-3 sm:grid-cols-12 items-end border border-slate-100 dark:border-slate-800 p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 relative">
+                      <div className="sm:col-span-4">
+                        <Field label="Colaborador">
+                          <select
+                            name="previous_employee_id"
+                            value={item.employeeId}
+                            onChange={(e) => updatePreviousUser(item.id, "employeeId", e.target.value)}
+                            className="input"
+                            required
+                          >
+                            <option value="">— selecione o colaborador —</option>
+                            {options.employees.map((e) => (
+                              <option key={e.value} value={e.value}>
+                                {e.label}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Field label="Data de Uso (Opcional)">
+                          <input
+                            type="date"
+                            name="previous_date"
+                            value={item.date}
+                            onChange={(e) => updatePreviousUser(item.id, "date", e.target.value)}
+                            className="input"
+                          />
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-4">
+                        <Field label="Motivo/Observação (Opcional)">
+                          <input
+                            type="text"
+                            name="previous_reason"
+                            placeholder="Ex: Devolução antiga"
+                            value={item.reason}
+                            onChange={(e) => updatePreviousUser(item.id, "reason", e.target.value)}
+                            className="input"
+                          />
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removePreviousUser(item.id)}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors"
+                          title="Remover"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
 
           <div className="flex justify-end gap-2">
             <button
