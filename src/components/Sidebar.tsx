@@ -57,9 +57,7 @@ function SidebarContent() {
         }`}
       >
         <div className="flex h-16 items-center gap-3 border-b border-slate-200 px-5 dark:border-slate-800">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-            OS
-          </div>
+          <img src="/logo.jpg" alt="Logo" className="h-9 w-9 rounded-lg object-cover" />
           <div className="leading-tight">
             <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
               Ativos OSAFI

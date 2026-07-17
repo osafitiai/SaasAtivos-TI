@@ -12,9 +12,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 p-4 dark:from-slate-950 dark:to-slate-900">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-bold text-white shadow-lg">
-            OS
-          </div>
+          <img src="/logo.jpg" alt="Logo" className="mx-auto mb-3 h-14 w-14 rounded-2xl object-cover shadow-lg" />
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             Gestão de Ativos OSAFI
           </h1>
