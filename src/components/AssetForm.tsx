@@ -126,10 +126,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
     }
     setSuccess("Ativo salvo com sucesso!");
     setPreviousUsers([]);
-    setTimeout(() => {
-      router.push(res.id ? `/ativos/${res.id}` : "/ativos");
-      router.refresh();
-    }, 1500);
+    router.push(res.id ? `/ativos/${res.id}` : "/ativos");
   }
 
   return (
@@ -192,7 +189,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
           )}
 
           {/* ABA 1: Identificação (Comum para todos, mas campos variam) */}
-          {steps[step] === "Identificação" && (
+          <div style={{ display: steps[step] === "Identificação" ? "block" : "none" }}>
             <div className="card p-6">
               <Grid>
                 {/* 1. Notebook Form */}
@@ -514,12 +511,13 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                 )}
               </Grid>
             </div>
-          )}
+          </div>
 
           {/* ABA 2: Dados técnicos (Apenas para notebook) */}
-          {steps[step] === "Dados técnicos" && isNotebook && (
-            <div className="card p-6">
-              <Grid>
+          {isNotebook && (
+            <div style={{ display: steps[step] === "Dados técnicos" ? "block" : "none" }}>
+              <div className="card p-6">
+                <Grid>
                 <Field label="Processador">
                   <input
                     name="tech_processador"
@@ -557,9 +555,10 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                 </Field>
               </Grid>
             </div>
+          </div>
           )}
 
-          {steps[step] === "Aquisição" && (
+          <div style={{ display: steps[step] === "Aquisição" ? "block" : "none" }}>
             <div className="card p-6">
               <Grid>
                 <Field label="Fornecedor">
@@ -639,7 +638,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                 </Field>
               </Grid>
             </div>
-          )}
+          </div>
 
           {asset && (
             <div className="card p-4 border border-dashed border-slate-200 dark:border-slate-800 space-y-4">
