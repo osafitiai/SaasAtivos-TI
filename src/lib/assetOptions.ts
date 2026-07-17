@@ -17,7 +17,7 @@ export async function loadAssetFormOptions(tenantId: string | null) {
       departmentOptions(tenantId),
       locationOptions(tenantId),
       supplierOptions(tenantId),
-      employeeOptions(tenantId),
+      employeeOptions(tenantId, false),
     ]);
   return { categories, companies, branches, departments, locations, suppliers, employees };
 }
