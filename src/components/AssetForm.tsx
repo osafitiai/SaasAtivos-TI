@@ -262,6 +262,36 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
                   </>
                 )}
@@ -328,6 +358,36 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
                   </>
                 )}
@@ -391,6 +451,36 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onAddNew={handleAddLocation}
                       />
                     </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
 
                   </>
                 )}
@@ -445,6 +535,36 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onChange={setSelectedLoc}
                         onAddNew={handleAddLocation}
                       />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
 
                   </>
@@ -505,6 +625,36 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         onChange={setSelectedLoc}
                         onAddNew={handleAddLocation}
                       />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
                     </Field>
 
                   </>
