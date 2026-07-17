@@ -178,7 +178,7 @@ export function CrudManager({
 
     if (col.linkPrefix) {
       return (
-        <Link href={`${col.linkPrefix}${row.id}`} className="font-medium text-brand-600 hover:underline">
+        <Link href={`${col.linkPrefix}${row.id}`} prefetch={false} className="font-medium text-brand-600 hover:underline">
           {content}
         </Link>
       );
@@ -234,6 +234,7 @@ export function CrudManager({
                       {columns.find((c) => c.linkPrefix) && (
                         <Link
                           href={`${columns.find((c) => c.linkPrefix)!.linkPrefix}${row.id}`}
+                          prefetch={false}
                           className="btn-ghost px-2 py-1 text-xs font-semibold text-brand-600 mr-2"
                         >
                           Ver

@@ -142,6 +142,7 @@ export function AssetsTable({
                   <td className="table-td">
                     <Link
                       href={`/ativos/${a.id}`}
+                      prefetch={false}
                       className="font-medium text-brand-600 hover:underline"
                     >
                       {a.category_icon} {a.name}
@@ -189,6 +190,7 @@ export function AssetsTable({
                       )}
                       <Link
                         href={`/ativos/${a.id}`}
+                        prefetch={false}
                         className="btn-ghost px-2 py-1 text-xs"
                       >
                         Ver
