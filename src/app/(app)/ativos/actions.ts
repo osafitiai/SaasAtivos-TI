@@ -23,7 +23,7 @@ const TECH_FIELDS = [
   "hostname", "mac_ethernet", "mac_wifi", "ip", "imei", "numero_linha", "operadora",
   "tamanho", "resolucao", "portas", "voltagem", "potencia", "capacidade", "estado_bateria",
   "endereco_mac", "endereco_ip", "chave_licenca_windows", "tamanho_polegadas",
-  "numero_serie_teclado", "numero_serie_mouse", "numero_serie_headset"
+  "numero_serie_teclado", "numero_serie_mouse", "numero_serie_headset", "ano_produto"
 ];
 
 export async function saveAsset(formData: FormData): Promise<{ error?: string; id?: string }> {
