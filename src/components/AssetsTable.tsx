@@ -18,6 +18,57 @@ interface AssetsTableProps {
   canDelete: boolean;
 }
 
+function getMissingFields(a: Asset) {
+  const missing: string[] = [];
+  const catLower = (a.category_name || "").toLowerCase();
+  const tech = (a.technical_data || {}) as Record<string, any>;
+
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado") || catLower.includes("kit");
+  const isHeadset = catLower.includes("headset");
+
+  // Common basic fields
+  if (!a.location_id) missing.push("Localização");
+  if (!a.physical_condition) missing.push("Condição");
+
+  if (isNotebook) {
+    if (!a.name) missing.push("Nome da máquina");
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+    if (!tech.processador) missing.push("Processador");
+    if (!tech.memoria_ram) missing.push("Memória RAM");
+    if (!tech.armazenamento) missing.push("Armazenamento");
+    if (!tech.tipo_armazenamento) missing.push("Tipo de armazenamento");
+    if (!tech.sistema_operacional) missing.push("Sistema operacional");
+    if (!tech.hostname) missing.push("Hostname");
+  } else if (isMonitor) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+    if (!tech.tamanho_polegadas) missing.push("Tamanho (polegadas)");
+  } else if (isKit) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!tech.numero_serie_teclado) missing.push("Nº de série do teclado");
+    if (!tech.numero_serie_mouse) missing.push("Nº de série do mouse");
+  } else if (isHeadset) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!tech.numero_serie_headset) missing.push("Nº de série do headset");
+  } else {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+  }
+
+  return missing;
+}
+
 export function AssetsTable({
   rows,
   employees,
@@ -124,6 +175,7 @@ export function AssetsTable({
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {rows.map((a) => {
               const isSelected = selectedIds.includes(a.id);
+              const missingFields = getMissingFields(a);
               return (
                 <tr
                   key={a.id}
@@ -140,13 +192,23 @@ export function AssetsTable({
                     />
                   </td>
                   <td className="table-td">
-                    <Link
-                      href={`/ativos/${a.id}`}
-                      prefetch={false}
-                      className="font-medium text-brand-600 hover:underline"
-                    >
-                      {a.category_icon} {a.name}
-                    </Link>
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/ativos/${a.id}`}
+                        prefetch={false}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        {a.category_icon} {a.name}
+                      </Link>
+                      {missingFields.length > 0 && (
+                        <span
+                          className="text-amber-500 cursor-help"
+                          title={`Faltam informações deste ativo: ${missingFields.join(", ")}`}
+                        >
+                          ⚠️
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-slate-400">
                       {a.brand} {a.model}
                     </div>
