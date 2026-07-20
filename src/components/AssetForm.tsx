@@ -211,10 +211,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                         className="input"
                       />
                     </Field>
-                    <Field label="Patrimônio" required>
+                    <Field label="Patrimônio">
                       <input
                         name="asset_tag"
-                        required
                         defaultValue={asset?.asset_tag ?? ""}
                         className="input"
                       />
@@ -299,10 +298,9 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                 {/* 2. Monitor Form */}
                 {isMonitor && (
                   <>
-                    <Field label="Patrimônio" required>
+                    <Field label="Patrimônio">
                       <input
                         name="asset_tag"
-                        required
                         defaultValue={asset?.asset_tag ?? ""}
                         className="input"
                       />

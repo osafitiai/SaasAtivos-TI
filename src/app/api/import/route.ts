@@ -245,11 +245,9 @@ export async function POST(request: Request) {
     if (catNorm === "notebook") {
       if (!nomeMaquina) addRowError("nome_maquina", "Nome da máquina é obrigatório para Notebook.");
       if (!serial) addRowError("numero_serie", "Número de série é obrigatório para Notebook.");
-      if (!tag) addRowError("patrimonio", "Patrimônio é obrigatório para Notebook.");
       if (!brand) addRowError("marca", "Marca é obrigatória para Notebook.");
       if (!model) addRowError("modelo", "Modelo é obrigatório para Notebook.");
     } else if (catNorm === "monitor") {
-      if (!tag) addRowError("patrimonio", "Patrimônio é obrigatório para Monitor.");
       if (!serial) addRowError("numero_serie", "Número de série é obrigatório para Monitor.");
       if (!brand) addRowError("marca", "Marca é obrigatória para Monitor.");
       if (!model) addRowError("modelo", "Modelo do monitor é obrigatório para Monitor.");
