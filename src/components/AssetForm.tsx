@@ -673,6 +673,13 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                     className="input"
                   />
                 </Field>
+                <Field label="Hostname">
+                  <input
+                    name="tech_hostname"
+                    defaultValue={tech.hostname ?? ""}
+                    className="input"
+                  />
+                </Field>
                 <Field label="Sistema operacional">
                   <input
                     name="tech_sistema_operacional"
