@@ -680,13 +680,6 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                     className="input"
                   />
                 </Field>
-                <Field label="Tipo de RAM">
-                  <input
-                    name="tech_tipo_ram"
-                    defaultValue={tech.tipo_ram ?? ""}
-                    className="input"
-                  />
-                </Field>
                 <Field label="Armazenamento">
                   <input
                     name="tech_armazenamento"

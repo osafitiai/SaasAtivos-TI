@@ -40,7 +40,6 @@ function getMissingFields(a: Asset) {
     if (!a.asset_tag) missing.push("Patrimônio");
     if (!tech.processador) missing.push("Processador");
     if (!tech.memoria_ram) missing.push("Memória RAM");
-    if (!tech.tipo_ram) missing.push("Tipo de RAM");
     if (!tech.armazenamento) missing.push("Armazenamento");
     if (!tech.tipo_armazenamento) missing.push("Tipo de armazenamento");
     if (!tech.sistema_operacional) missing.push("Sistema operacional");
