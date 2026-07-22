@@ -172,6 +172,17 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
       </div>
       <div className="space-y-4">
         <div className="card p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Aquisição</h3>
+          <dl className="space-y-2 text-sm">
+            <Info label="Fornecedor" value={asset.supplier_name} />
+            <Info label="Data de aquisição" value={formatDate(asset.acquisition_date)} />
+            <Info label="Nº da nota fiscal" value={asset.invoice_number} />
+            <Info label="Chave da NF-e" value={asset.invoice_key} />
+            <Info label="Data da nota fiscal" value={formatDate(asset.invoice_date)} />
+            <Info label="Ordem de compra" value={asset.purchase_order} />
+          </dl>
+        </div>
+        <div className="card p-5">
           <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Vida útil</h3>
           <dl className="space-y-2 text-sm">
             <Info label="Aquisição" value={formatDate(asset.acquisition_date)} />
