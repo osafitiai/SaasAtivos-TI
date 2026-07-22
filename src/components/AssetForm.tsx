@@ -673,6 +673,34 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                     className="input"
                   />
                 </Field>
+                <Field label="Memória RAM">
+                  <input
+                    name="tech_memoria_ram"
+                    defaultValue={tech.memoria_ram ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Tipo de RAM">
+                  <input
+                    name="tech_tipo_ram"
+                    defaultValue={tech.tipo_ram ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Armazenamento">
+                  <input
+                    name="tech_armazenamento"
+                    defaultValue={tech.armazenamento ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Tipo de armazenamento">
+                  <input
+                    name="tech_tipo_armazenamento"
+                    defaultValue={tech.tipo_armazenamento ?? ""}
+                    className="input"
+                  />
+                </Field>
                 <Field label="Hostname">
                   <input
                     name="tech_hostname"

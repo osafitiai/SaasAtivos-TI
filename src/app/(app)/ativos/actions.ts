@@ -19,7 +19,7 @@ function str(v: FormDataEntryValue | null): string | null {
 }
 
 const TECH_FIELDS = [
-  "processador", "memoria_ram", "armazenamento", "tipo_armazenamento", "sistema_operacional",
+  "processador", "memoria_ram", "tipo_ram", "armazenamento", "tipo_armazenamento", "sistema_operacional",
   "hostname", "mac_ethernet", "mac_wifi", "ip", "imei", "numero_linha", "operadora",
   "tamanho", "resolucao", "portas", "voltagem", "potencia", "capacidade", "estado_bateria",
   "endereco_mac", "endereco_ip", "chave_licenca_windows", "tamanho_polegadas",
