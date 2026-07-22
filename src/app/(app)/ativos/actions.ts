@@ -158,8 +158,6 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes("uq_assets_serial"))
       return { error: "Já existe um ativo com este número de série no tenant." };
-    if (msg.includes("uq_assets_tag"))
-      return { error: "Já existe um ativo com este patrimônio nesta empresa." };
     return { error: "Erro ao salvar: " + msg };
   }
 }

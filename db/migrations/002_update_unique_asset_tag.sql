@@ -1,5 +1,2 @@
--- Drop the old unique index
+-- Drop the unique index for asset_tag completely to allow duplicate asset tags in the tenant
 drop index if exists uq_assets_tag;
-
--- Create the new unique index that includes company_id, permitting duplicate asset tags for different companies
-create unique index uq_assets_tag on assets (tenant_id, company_id, asset_tag);
