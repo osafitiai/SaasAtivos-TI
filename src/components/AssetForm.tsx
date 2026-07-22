@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { saveAsset, quickCreateLocation } from "@/app/(app)/ativos/actions";
 import type { FieldOption } from "@/components/CrudManager";
 import type { Asset } from "@/lib/types";
+import { toDateInputValue } from "@/lib/format";
 
 interface Options {
   categories: FieldOption[];
@@ -767,7 +768,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                   <input
                     type="date"
                     name="invoice_date"
-                    defaultValue={asset?.invoice_date ? String(asset.invoice_date).slice(0, 10) : ""}
+                    defaultValue={toDateInputValue(asset?.invoice_date)}
                     className="input"
                   />
                 </Field>
@@ -783,7 +784,7 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
                   <input
                     type="date"
                     name="acquisition_date"
-                    defaultValue={asset?.acquisition_date ? String(asset.acquisition_date).slice(0, 10) : ""}
+                    defaultValue={toDateInputValue(asset?.acquisition_date)}
                     className="input"
                   />
                 </Field>
