@@ -80,6 +80,7 @@ export function CrudManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<CrudRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   function openNew() {
@@ -103,7 +104,9 @@ export function CrudManager({
       return;
     }
     setOpen(false);
+    setSuccess("Alterações salvas com sucesso!");
     router.refresh();
+    setTimeout(() => setSuccess(null), 3000);
   }
 
   async function handleDelete(id: string) {
@@ -116,7 +119,9 @@ export function CrudManager({
       alert(res.error);
       return;
     }
+    setSuccess("Registro excluído com sucesso!");
     router.refresh();
+    setTimeout(() => setSuccess(null), 3000);
   }
 
   function renderCell(row: CrudRow, col: ColumnSpec): React.ReactNode {
@@ -173,7 +178,7 @@ export function CrudManager({
 
     if (col.linkPrefix) {
       return (
-        <Link href={`${col.linkPrefix}${row.id}`} className="font-medium text-brand-600 hover:underline">
+        <Link href={`${col.linkPrefix}${row.id}`} prefetch={false} className="font-medium text-brand-600 hover:underline">
           {content}
         </Link>
       );
@@ -183,6 +188,12 @@ export function CrudManager({
 
   return (
     <div>
+      {success && (
+        <div className="mb-4 rounded-lg bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 dark:bg-green-950/20 dark:text-green-300 transition duration-150">
+          {success}
+        </div>
+      )}
+
       {canEdit && (
         <div className="mb-4 flex justify-end">
           <button className="btn-primary" onClick={openNew}>
@@ -220,6 +231,15 @@ export function CrudManager({
                   ))}
                   {canEdit && (
                     <td className="table-td text-right">
+                      {columns.find((c) => c.linkPrefix) && (
+                        <Link
+                          href={`${columns.find((c) => c.linkPrefix)!.linkPrefix}${row.id}`}
+                          prefetch={false}
+                          className="btn-ghost px-2 py-1 text-xs font-semibold text-brand-600 mr-2"
+                        >
+                          Ver
+                        </Link>
+                      )}
                       <button className="btn-ghost px-2 py-1" onClick={() => openEdit(row)}>
                         ✏️
                       </button>

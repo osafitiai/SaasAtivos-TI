@@ -2,9 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   serverExternalPackages: ["pg", "bcryptjs"],
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
 };
 
 export default nextConfig;

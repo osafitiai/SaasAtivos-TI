@@ -18,13 +18,9 @@ const crud = makeCrudActions({
     { name: "full_name" },
     { name: "email" },
     { name: "company_id" },
-    { name: "branch_id" },
     { name: "department_id" },
-    { name: "registration_number" },
     { name: "job_title" },
-    { name: "employment_type" },
     { name: "cost_center" },
-    { name: "phone" },
     { name: "hire_date", type: "date" },
     { name: "termination_date", type: "date" },
     { name: "status" },
@@ -52,7 +48,7 @@ export default async function ColaboradoresPage() {
 
   const rows = await query(
     `select e.*, d.name as department_name, coalesce(c.trade_name,c.legal_name) as company_name,
-            (select count(*) from asset_assignments aa where aa.employee_id = e.id and aa.ended_at is null)::int as assets_count,
+            (select count(*) from assets a where a.current_employee_id = e.id and a.deleted_at is null)::int as assets_count,
             (select coalesce(sum(a.acquisition_value),0) from assets a where a.current_employee_id = e.id and a.deleted_at is null) as assets_value
        from employees e
        left join departments d on d.id = e.department_id
@@ -64,19 +60,10 @@ export default async function ColaboradoresPage() {
   const fields: FieldSpec[] = [
     { name: "full_name", label: "Nome completo", type: "text", required: true, colSpan: 2 },
     { name: "email", label: "E-mail corporativo", type: "email" },
-    { name: "registration_number", label: "Matrícula", type: "text" },
     { name: "company_id", label: "Empresa", type: "select", options: companies },
-    { name: "branch_id", label: "Filial", type: "select", options: branches },
     { name: "department_id", label: "Departamento", type: "select", options: departments },
     { name: "job_title", label: "Cargo", type: "text" },
     { name: "cost_center", label: "Centro de custo", type: "text" },
-    {
-      name: "employment_type",
-      label: "Tipo de vínculo",
-      type: "select",
-      options: ["CLT", "PJ", "Estágio", "Terceirizado", "Temporário"].map((v) => ({ value: v, label: v })),
-    },
-    { name: "phone", label: "Telefone", type: "text" },
     { name: "hire_date", label: "Data de admissão", type: "date" },
     { name: "termination_date", label: "Data de desligamento", type: "date" },
     {

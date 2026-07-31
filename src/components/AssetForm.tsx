@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveAsset } from "@/app/(app)/ativos/actions";
+import { saveAsset, quickCreateLocation } from "@/app/(app)/ativos/actions";
 import type { FieldOption } from "@/components/CrudManager";
 import type { Asset } from "@/lib/types";
-import { ASSET_STATUSES, PHYSICAL_CONDITIONS } from "@/lib/constants";
 import { toDateInputValue } from "@/lib/format";
 
 interface Options {
@@ -15,58 +14,131 @@ interface Options {
   departments: FieldOption[];
   locations: FieldOption[];
   suppliers: FieldOption[];
+  employees: FieldOption[];
 }
-
-const SECTIONS = [
-  "Identificação",
-  "Categoria e dados técnicos",
-  "Aquisição",
-  "Localização e responsável",
-  "Garantia",
-  "Revisão",
-];
 
 export function AssetForm({ options, asset }: { options: Options; asset?: Asset }) {
   const router = useRouter();
+  const [categoryId, setCategoryId] = useState(asset?.category_id ?? "");
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [locations, setLocations] = useState(options.locations);
+  const [selectedLoc, setSelectedLoc] = useState(asset?.location_id ?? "");
+  const [previousUsers, setPreviousUsers] = useState<{
+    id: string;
+    employeeId: string;
+    date: string;
+    reason: string;
+  }[]>([]);
+
+  const addPreviousUser = () => {
+    setPreviousUsers((prev) => [
+      ...prev,
+      { id: Math.random().toString(), employeeId: "", date: "", reason: "" },
+    ]);
+  };
+
+  const removePreviousUser = (id: string) => {
+    setPreviousUsers((prev) => prev.filter((item) => item.id !== id));
+  };
+
+  const updatePreviousUser = (
+    id: string,
+    field: "employeeId" | "date" | "reason",
+    value: string
+  ) => {
+    setPreviousUsers((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const filteredCategories = options.categories.filter(
+    (c) => !options.employees.some((e) => e.label.toLowerCase() === c.label.toLowerCase())
+  );
+  const selectedCatLabel = filteredCategories.find((o) => o.value === categoryId)?.label || "";
+  const catLower = selectedCatLabel.toLowerCase();
+
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado");
+  const isHeadset = catLower.includes("headset");
+
   const tech = (asset?.technical_data ?? {}) as Record<string, string>;
+
+  const steps: string[] = ["Identificação"];
+  if (isNotebook) steps.push("Dados técnicos");
+  steps.push("Aquisição");
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (categoryId && val && val !== categoryId) {
+      if (
+        !confirm(
+          "Alterar a categoria pode apagar os dados específicos já preenchidos nesta tela. Deseja continuar?"
+        )
+      ) {
+        return;
+      }
+    }
+    setCategoryId(val);
+    setStep(0);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const handleAddLocation = async () => {
+    const name = prompt("Digite o nome da nova localização:");
+    if (!name || name.trim() === "") return;
+    const res = await quickCreateLocation(name.trim());
+    if (res.error) {
+      alert("Erro ao criar localização: " + res.error);
+    } else if (res.id) {
+      const newOpt = { value: res.id, label: name.trim() };
+      setLocations((prev) => [...prev, newOpt]);
+      setSelectedLoc(res.id);
+    }
+  };
 
   async function handleSubmit(formData: FormData) {
     setPending(true);
     setError(null);
+    setSuccess(null);
+    // Adiciona localização atual selecionada caso tenha sido criada dinamicamente
+    formData.set("location_id", selectedLoc);
+
+    // Se for kit ou headset, o nome do ativo pode ser o Modelo ou Categoria + Modelo
+    const brand = String(formData.get("brand") || "").trim();
+    const model = String(formData.get("model") || "").trim();
+    const nameMaquina = String(formData.get("name") || "").trim();
+    
+    let finalName = nameMaquina;
+    if (!finalName) {
+      finalName = `${selectedCatLabel} ${brand} ${model}`.trim();
+    }
+    formData.set("name", finalName);
+
     const res = await saveAsset(formData);
     setPending(false);
     if (res.error) {
       setError(res.error);
       return;
     }
+    setSuccess("Ativo salvo com sucesso!");
+    setPreviousUsers([]);
     router.push(res.id ? `/ativos/${res.id}` : "/ativos");
-    router.refresh();
   }
 
   return (
     <form action={handleSubmit} className="space-y-6">
       {asset && <input type="hidden" name="id" value={asset.id} />}
 
-      {/* Stepper */}
-      <div className="flex flex-wrap gap-2">
-        {SECTIONS.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStep(i)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              i === step
-                ? "bg-brand-600 text-white"
-                : "bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300"
-            }`}
-          >
-            {i + 1}. {s}
-          </button>
-        ))}
-      </div>
+      {success && (
+        <div className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-900/20 dark:text-green-300">
+          {success}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-300">
@@ -74,244 +146,866 @@ export function AssetForm({ options, asset }: { options: Options; asset?: Asset 
         </div>
       )}
 
-      {/* Todas as seções ficam no DOM (display) para não perder valores ao trocar de aba */}
-      <Section active={step === 0}>
-        <Grid>
-          <Field label="Nome do ativo" required span={2}>
-            <input name="name" required defaultValue={asset?.name ?? ""} className="input" />
-          </Field>
-          <Field label="Código interno">
-            <input name="internal_code" defaultValue={asset?.internal_code ?? ""} className="input" />
-          </Field>
-          <Field label="Patrimônio">
-            <input name="asset_tag" defaultValue={asset?.asset_tag ?? ""} className="input" />
-          </Field>
-          <Field label="Número de série">
-            <input name="serial_number" defaultValue={asset?.serial_number ?? ""} className="input" />
-          </Field>
-          <Field label="Etiqueta/QR">
-            <input name="etiqueta" defaultValue="" className="input" placeholder="opcional" />
-          </Field>
-          <Field label="Marca">
-            <input name="brand" defaultValue={asset?.brand ?? ""} className="input" />
-          </Field>
-          <Field label="Modelo">
-            <input name="model" defaultValue={asset?.model ?? ""} className="input" />
-          </Field>
-          <Field label="Fabricante">
-            <input name="manufacturer" defaultValue={asset?.manufacturer ?? ""} className="input" />
-          </Field>
-          <Field label="Cor">
-            <input name="color" defaultValue={asset?.color ?? ""} className="input" />
-          </Field>
-          <Field label="Condição física">
-            <select name="physical_condition" defaultValue={asset?.physical_condition ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {PHYSICAL_CONDITIONS.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Descrição" span={2}>
-            <textarea name="description" rows={2} defaultValue={asset?.description ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 1}>
-        <Grid>
-          <Field label="Categoria" required>
-            <select name="category_id" required defaultValue={asset?.category_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.categories.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Vida útil (anos)" help="Vazio herda da categoria">
-            <input name="useful_life_years" type="number" min="0" defaultValue={asset?.useful_life_years ?? ""} className="input" />
-          </Field>
-        </Grid>
-        <h4 className="mt-4 text-sm font-semibold text-slate-500">Dados técnicos</h4>
-        <Grid>
-          <TechField label="Processador" name="processador" tech={tech} />
-          <TechField label="Memória RAM" name="memoria_ram" tech={tech} />
-          <TechField label="Armazenamento" name="armazenamento" tech={tech} />
-          <TechField label="Sistema operacional" name="sistema_operacional" tech={tech} />
-          <TechField label="Hostname" name="hostname" tech={tech} />
-          <TechField label="IP" name="ip" tech={tech} />
-          <TechField label="MAC Ethernet" name="mac_ethernet" tech={tech} />
-          <TechField label="MAC Wi-Fi" name="mac_wifi" tech={tech} />
-          <TechField label="IMEI" name="imei" tech={tech} />
-          <TechField label="Número da linha" name="numero_linha" tech={tech} />
-          <TechField label="Operadora" name="operadora" tech={tech} />
-          <TechField label="Capacidade" name="capacidade" tech={tech} />
-          <TechField label="Tamanho (monitor)" name="tamanho" tech={tech} />
-          <TechField label="Resolução" name="resolucao" tech={tech} />
-          <TechField label="Nº de portas (switch)" name="portas" tech={tech} />
-          <TechField label="Estado da bateria" name="estado_bateria" tech={tech} />
-        </Grid>
-      </Section>
-
-      <Section active={step === 2}>
-        <Grid>
-          <Field label="Fornecedor">
-            <select name="supplier_id" defaultValue={asset?.supplier_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.suppliers.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Empresa compradora">
-            <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.companies.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Nº da nota fiscal">
-            <input name="invoice_number" defaultValue={asset?.invoice_number ?? ""} className="input" />
-          </Field>
-          <Field label="Chave da NF-e">
-            <input name="invoice_key" defaultValue={asset?.invoice_key ?? ""} className="input" />
-          </Field>
-          <Field label="Data da nota fiscal">
-            <input name="invoice_date" type="date" defaultValue={toDateInputValue(asset?.invoice_date)} className="input" />
-          </Field>
-          <Field label="Pedido de compra">
-            <input name="purchase_order" defaultValue={asset?.purchase_order ?? ""} className="input" />
-          </Field>
-          <Field label="Data de aquisição">
-            <input name="acquisition_date" type="date" defaultValue={toDateInputValue(asset?.acquisition_date)} className="input" />
-          </Field>
-          <Field label="Valor de aquisição (BRL)">
-            <input name="acquisition_value" type="number" step="0.01" min="0" defaultValue={asset?.acquisition_value ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 3}>
-        <Grid>
-          <Field label="Filial">
-            <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.branches.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Departamento">
-            <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.departments.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Localização">
-            <select name="location_id" defaultValue={asset?.location_id ?? ""} className="input">
-              <option value="">— selecione —</option>
-              {options.locations.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Status">
-            <select name="status" defaultValue={asset?.status ?? "Disponível"} className="input">
-              {ASSET_STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>{s.value}</option>
-              ))}
-            </select>
-          </Field>
-        </Grid>
-        <p className="mt-2 text-xs text-slate-400">
-          A associação a um colaborador é feita pela ação “Movimentar” após salvar o ativo, garantindo o histórico.
-        </p>
-      </Section>
-
-      <Section active={step === 4}>
-        <Grid>
-          <Field label="Início da garantia">
-            <input name="warranty_start_date" type="date" defaultValue={toDateInputValue(asset?.warranty_start_date)} className="input" />
-          </Field>
-          <Field label="Término da garantia">
-            <input name="warranty_end_date" type="date" defaultValue={toDateInputValue(asset?.warranty_end_date)} className="input" />
-          </Field>
-          <Field label="Observações" span={2}>
-            <textarea name="notes" rows={3} defaultValue={asset?.notes ?? ""} className="input" />
-          </Field>
-        </Grid>
-      </Section>
-
-      <Section active={step === 5}>
-        <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-800/50 dark:text-slate-300">
-          Revise os dados nas abas anteriores. A <strong>previsão de substituição</strong> é calculada
-          automaticamente a partir da data de aquisição somada à vida útil. Clique em salvar para concluir.
-        </div>
-      </Section>
-
-      {/* Navegação */}
-      <div className="flex items-center justify-between border-t border-slate-200 pt-4 dark:border-slate-800">
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
-          disabled={step === 0}
+      {/* Categoria do Ativo (Sempre visível no topo e obrigatório) */}
+      <div className="card p-4">
+        <label className="label font-bold text-slate-700 dark:text-slate-200">
+          Categoria do ativo <span className="text-red-500">*</span>
+        </label>
+        <select
+          name="category_id"
+          required
+          value={categoryId}
+          onChange={handleCategoryChange}
+          className="input mt-1"
         >
-          ← Anterior
-        </button>
-        <div className="flex gap-2">
-          {step < SECTIONS.length - 1 ? (
-            <button type="button" className="btn-primary" onClick={() => setStep((s) => s + 1)}>
-              Próximo →
-            </button>
-          ) : (
-            <button type="submit" className="btn-primary" disabled={pending}>
-              {pending ? "Salvando..." : "Salvar ativo"}
-            </button>
-          )}
-        </div>
+          <option value="">— selecione a categoria —</option>
+          {filteredCategories.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
+
+      {categoryId && (
+        <>
+          {/* Abas dinâmicas se houver mais de uma */}
+          {steps.length > 1 && (
+            <div className="flex gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
+              {steps.map((t, idx) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setStep(idx)}
+                  className={`border-b-2 px-4 py-2 text-sm font-medium transition ${
+                    step === idx
+                      ? "border-brand-600 text-brand-600"
+                      : "border-transparent text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ABA 1: Identificação (Comum para todos, mas campos variam) */}
+          <div style={{ display: steps[step] === "Identificação" ? "block" : "none" }}>
+            <div className="card p-6">
+              <Grid>
+                {/* 1. Notebook Form */}
+                {isNotebook && (
+                  <>
+                    <Field label="Nome da máquina" required>
+                      <input
+                        name="name"
+                        required
+                        defaultValue={asset?.name ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série" required>
+                      <input
+                        name="serial_number"
+                        required
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Ano do produto">
+                      <input
+                        name="tech_ano_produto"
+                        type="number"
+                        min="1900"
+                        max="2100"
+                        defaultValue={tech.ano_produto ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                  </>
+                )}
+
+                {/* 2. Monitor Form */}
+                {isMonitor && (
+                  <>
+                    <Field label="Patrimônio">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série" required>
+                      <input
+                        name="serial_number"
+                        required
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo do monitor" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Tamanho em polegadas" required>
+                      <input
+                        name="tech_tamanho_polegadas"
+                        type="number"
+                        min="1"
+                        required
+                        defaultValue={tech.tamanho_polegadas ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                  </>
+                )}
+
+                {/* 3. Kit Teclado e Mouse Form */}
+                {isKit && (
+                  <>
+                    <Field label="Número de série do teclado" required>
+                      <input
+                        name="tech_numero_serie_teclado"
+                        required
+                        defaultValue={tech.numero_serie_teclado ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série do mouse" required>
+                      <input
+                        name="tech_numero_serie_mouse"
+                        required
+                        defaultValue={tech.numero_serie_mouse ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio (caso exista)">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                  </>
+                )}
+
+                {/* 4. Headset Form */}
+                {isHeadset && (
+                  <>
+                    <Field label="Número de série do headset" required>
+                      <input
+                        name="tech_numero_serie_headset"
+                        required
+                        defaultValue={tech.numero_serie_headset ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca" required>
+                      <input
+                        name="brand"
+                        required
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo" required>
+                      <input
+                        name="model"
+                        required
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio (caso exista)">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                  </>
+                )}
+
+                {/* 5. Fallback Form for any other category */}
+                {!isNotebook && !isMonitor && !isKit && !isHeadset && (
+                  <>
+                    <Field label="Nome do ativo" required span={2}>
+                      <input
+                        name="name"
+                        required
+                        defaultValue={asset?.name ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Número de série">
+                      <input
+                        name="serial_number"
+                        defaultValue={asset?.serial_number ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Patrimônio">
+                      <input
+                        name="asset_tag"
+                        defaultValue={asset?.asset_tag ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Marca">
+                      <input
+                        name="brand"
+                        defaultValue={asset?.brand ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Modelo">
+                      <input
+                        name="model"
+                        defaultValue={asset?.model ?? ""}
+                        className="input"
+                      />
+                    </Field>
+                    <Field label="Condição do equipamento" required>
+                      <ConditionSelect defaultValue={asset?.physical_condition} />
+                    </Field>
+                    <Field label="Usuário responsável">
+                      <EmployeeSelect
+                        employees={options.employees}
+                        defaultValue={asset?.current_employee_id}
+                      />
+                    </Field>
+                    <Field label="Localização">
+                      <LocationSelect
+                        locations={locations}
+                        value={selectedLoc}
+                        onChange={setSelectedLoc}
+                        onAddNew={handleAddLocation}
+                      />
+                    </Field>
+                    <Field label="Empresa">
+                      <select name="company_id" defaultValue={asset?.company_id ?? ""} className="input">
+                        <option value="">— selecione a empresa —</option>
+                        {options.companies.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Filial">
+                      <select name="branch_id" defaultValue={asset?.branch_id ?? ""} className="input">
+                        <option value="">— selecione a filial —</option>
+                        {options.branches.map((b) => (
+                          <option key={b.value} value={b.value}>
+                            {b.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Departamento">
+                      <select name="department_id" defaultValue={asset?.department_id ?? ""} className="input">
+                        <option value="">— selecione o departamento —</option>
+                        {options.departments.map((d) => (
+                          <option key={d.value} value={d.value}>
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                  </>
+                )}
+              </Grid>
+            </div>
+          </div>
+
+          {/* ABA 2: Dados técnicos (Apenas para notebook) */}
+          {isNotebook && (
+            <div style={{ display: steps[step] === "Dados técnicos" ? "block" : "none" }}>
+              <div className="card p-6">
+                <Grid>
+                <Field label="Processador">
+                  <input
+                    name="tech_processador"
+                    defaultValue={tech.processador ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Memória RAM">
+                  <input
+                    name="tech_memoria_ram"
+                    defaultValue={tech.memoria_ram ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Armazenamento">
+                  <input
+                    name="tech_armazenamento"
+                    defaultValue={tech.armazenamento ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Tipo de armazenamento">
+                  <input
+                    name="tech_tipo_armazenamento"
+                    defaultValue={tech.tipo_armazenamento ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Hostname">
+                  <input
+                    name="tech_hostname"
+                    defaultValue={tech.hostname ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Sistema operacional">
+                  <input
+                    name="tech_sistema_operacional"
+                    defaultValue={tech.sistema_operacional ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Endereço MAC">
+                  <input
+                    name="tech_endereco_mac"
+                    defaultValue={tech.endereco_mac ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Endereço IP">
+                  <input
+                    name="tech_endereco_ip"
+                    defaultValue={tech.endereco_ip ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Chave de licença do Windows">
+                  <input
+                    name="tech_chave_licenca_windows"
+                    defaultValue={tech.chave_licenca_windows ?? ""}
+                    className="input"
+                  />
+                </Field>
+              </Grid>
+            </div>
+          </div>
+          )}
+
+          <div style={{ display: steps[step] === "Aquisição" ? "block" : "none" }}>
+            <div className="card p-6">
+              <Grid>
+                <Field label="Fornecedor">
+                  <select name="supplier_id" defaultValue={asset?.supplier_id ?? ""} className="input">
+                    <option value="">— selecione o fornecedor —</option>
+                    {options.suppliers.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Nº da nota fiscal">
+                  <input
+                    type="text"
+                    name="invoice_number"
+                    defaultValue={asset?.invoice_number ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Chave da NF-e">
+                  <input
+                    type="text"
+                    name="invoice_key"
+                    defaultValue={asset?.invoice_key ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Data da nota fiscal">
+                  <input
+                    type="date"
+                    name="invoice_date"
+                    defaultValue={toDateInputValue(asset?.invoice_date)}
+                    className="input"
+                  />
+                </Field>
+                <Field label="OC da compra / Pedido de compra">
+                  <input
+                    type="text"
+                    name="purchase_order"
+                    defaultValue={asset?.purchase_order ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Data de aquisição / compra">
+                  <input
+                    type="date"
+                    name="acquisition_date"
+                    defaultValue={toDateInputValue(asset?.acquisition_date)}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Valor de aquisição / produto (BRL)">
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="acquisition_value"
+                    defaultValue={asset?.acquisition_value ?? ""}
+                    className="input"
+                  />
+                </Field>
+                <Field label="Anexar arquivo da Nota Fiscal (PDF, JPG, PNG)">
+                  <input
+                    type="file"
+                    name="invoice_file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="input"
+                  />
+                </Field>
+                <Field label="Observações" span={2}>
+                  <textarea
+                    name="notes"
+                    rows={4}
+                    defaultValue={asset?.notes ?? ""}
+                    className="input"
+                  />
+                </Field>
+              </Grid>
+            </div>
+          </div>
+
+          {asset && (
+            <div className="card p-4 border border-dashed border-slate-200 dark:border-slate-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    Registrar Uso/Colaborador Anterior (Histórico)
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Selecione um ou mais colaboradores que já usaram este equipamento no passado.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addPreviousUser}
+                  className="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1 border border-slate-200 dark:border-slate-700 transition-colors"
+                >
+                  ➕ Adicionar
+                </button>
+              </div>
+
+              {previousUsers.length === 0 ? (
+                <p className="text-xs text-slate-500 italic py-2">
+                  Nenhum colaborador anterior adicionado para registro nesta alteração. Clique em "Adicionar" para registrar uso anterior.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {previousUsers.map((item) => (
+                    <div key={item.id} className="grid grid-cols-1 gap-3 sm:grid-cols-12 items-end border border-slate-100 dark:border-slate-800 p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 relative">
+                      <div className="sm:col-span-4">
+                        <Field label="Colaborador">
+                          <select
+                            name="previous_employee_id"
+                            value={item.employeeId}
+                            onChange={(e) => updatePreviousUser(item.id, "employeeId", e.target.value)}
+                            className="input"
+                            required
+                          >
+                            <option value="">— selecione o colaborador —</option>
+                            {options.employees.map((e) => (
+                              <option key={e.value} value={e.value}>
+                                {e.label}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Field label="Data de Uso (Opcional)">
+                          <input
+                            type="date"
+                            name="previous_date"
+                            value={item.date}
+                            onChange={(e) => updatePreviousUser(item.id, "date", e.target.value)}
+                            className="input"
+                          />
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-4">
+                        <Field label="Motivo/Observação (Opcional)">
+                          <input
+                            type="text"
+                            name="previous_reason"
+                            placeholder="Ex: Devolução antiga"
+                            value={item.reason}
+                            onChange={(e) => updatePreviousUser(item.id, "reason", e.target.value)}
+                            className="input"
+                          />
+                        </Field>
+                      </div>
+                      <div className="sm:col-span-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => removePreviousUser(item.id)}
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors"
+                          title="Remover"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="submit"
+              disabled={pending}
+              className="btn-primary px-6 py-2.5 font-bold"
+            >
+              {pending ? "Salvando..." : "Salvar Ativo"}
+            </button>
+          </div>
+        </>
+      )}
     </form>
   );
 }
 
-function Section({ active, children }: { active: boolean; children: React.ReactNode }) {
-  return <div className={active ? "block" : "hidden"}>{children}</div>;
-}
 function Grid({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{children}</div>;
 }
+
 function Field({
   label,
   required,
   span,
-  help,
   children,
 }: {
   label: string;
   required?: boolean;
   span?: number;
-  help?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className={span === 2 ? "sm:col-span-2" : ""}>
+    <div className={span ? `sm:col-span-${span}` : ""}>
       <label className="label">
-        {label}
-        {required && <span className="text-red-500"> *</span>}
+        {label} {required && <span className="text-red-500">*</span>}
       </label>
       {children}
-      {help && <p className="mt-1 text-xs text-slate-400">{help}</p>}
     </div>
   );
 }
-function TechField({ label, name, tech }: { label: string; name: string; tech: Record<string, string> }) {
+
+function ConditionSelect({ defaultValue }: { defaultValue?: string | null }) {
   return (
-    <Field label={label}>
-      <input name={`tech_${name}`} defaultValue={tech[name] ?? ""} className="input" />
-    </Field>
+    <select name="physical_condition" required defaultValue={defaultValue ?? "Boa"} className="input">
+      <option value="Boa">Boa</option>
+      <option value="Média">Média</option>
+      <option value="Ruim">Ruim</option>
+    </select>
+  );
+}
+
+function EmployeeSelect({
+  employees,
+  defaultValue,
+}: {
+  employees: FieldOption[];
+  defaultValue?: string | null;
+}) {
+  return (
+    <select name="current_employee_id" defaultValue={defaultValue ?? ""} className="input">
+      <option value="">— Sem responsável —</option>
+      {employees.map((e) => (
+        <option key={e.value} value={e.value}>
+          {e.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function LocationSelect({
+  locations,
+  value,
+  onChange,
+  onAddNew,
+}: {
+  locations: FieldOption[];
+  value: string;
+  onChange: (v: string) => void;
+  onAddNew: () => void;
+}) {
+  return (
+    <div className="flex gap-2">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="input flex-1"
+      >
+        <option value="">— selecione —</option>
+        {locations.map((l) => (
+          <option key={l.value} value={l.value}>
+            {l.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={onAddNew}
+        className="btn-secondary px-3 py-2 font-bold text-lg"
+        title="Cadastrar nova localização"
+      >
+        +
+      </button>
+    </div>
   );
 }

@@ -98,13 +98,10 @@ export default async function ColaboradorDetail({
           </div>
           <dl className="space-y-2 text-sm">
             <Row label="E-mail" value={emp.email} />
-            <Row label="Matrícula" value={emp.registration_number} />
             <Row label="Cargo" value={emp.job_title} />
             <Row label="Empresa" value={emp.company_name} />
             <Row label="Departamento" value={emp.department_name} />
             <Row label="Centro de custo" value={emp.cost_center} />
-            <Row label="Tipo de vínculo" value={emp.employment_type} />
-            <Row label="Telefone" value={emp.phone} />
             <Row label="Admissão" value={formatDate(emp.hire_date)} />
             {emp.termination_date && <Row label="Desligamento" value={formatDate(emp.termination_date)} />}
           </dl>

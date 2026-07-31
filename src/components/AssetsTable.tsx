@@ -1,0 +1,287 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { AssetStatusBadge } from "@/components/Badge";
+import { MovementModal } from "@/components/MovementModal";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { deleteAssetById, deleteAssets } from "@/app/(app)/ativos/actions";
+import type { Asset } from "@/lib/types";
+
+interface AssetsTableProps {
+  rows: Asset[];
+  employees: any[];
+  locations: any[];
+  departments: any[];
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+function getMissingFields(a: Asset) {
+  const missing: string[] = [];
+  const catLower = (a.category_name || "").toLowerCase();
+  const tech = (a.technical_data || {}) as Record<string, any>;
+
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado") || catLower.includes("kit");
+  const isHeadset = catLower.includes("headset");
+
+  // Common basic fields
+  if (!a.location_id) missing.push("Localização");
+  if (!a.physical_condition) missing.push("Condição");
+
+  if (isNotebook) {
+    if (!a.name) missing.push("Nome da máquina");
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+    if (!tech.processador) missing.push("Processador");
+    if (!tech.memoria_ram) missing.push("Memória RAM");
+    if (!tech.armazenamento) missing.push("Armazenamento");
+    if (!tech.tipo_armazenamento) missing.push("Tipo de armazenamento");
+    if (!tech.sistema_operacional) missing.push("Sistema operacional");
+    if (!tech.hostname) missing.push("Hostname");
+  } else if (isMonitor) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+    if (!tech.tamanho_polegadas) missing.push("Tamanho (polegadas)");
+  } else if (isKit) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!tech.numero_serie_teclado) missing.push("Nº de série do teclado");
+    if (!tech.numero_serie_mouse) missing.push("Nº de série do mouse");
+  } else if (isHeadset) {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!tech.numero_serie_headset) missing.push("Nº de série do headset");
+  } else {
+    if (!a.brand) missing.push("Marca");
+    if (!a.model) missing.push("Modelo");
+    if (!a.serial_number) missing.push("Número de série");
+    if (!a.asset_tag) missing.push("Patrimônio");
+  }
+
+  return missing;
+}
+
+export function AssetsTable({
+  rows,
+  employees,
+  locations,
+  departments,
+  canEdit,
+  canDelete,
+}: AssetsTableProps) {
+  const router = useRouter();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const allSelected = rows.length > 0 && selectedIds.length === rows.length;
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(rows.map((r) => r.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds((prev) => [...prev, id]);
+    } else {
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (
+      !confirm(
+        `Tem certeza que deseja excluir os ${selectedIds.length} ativos selecionados?`
+      )
+    ) {
+      return;
+    }
+
+    setDeleting(true);
+    const res = await deleteAssets(selectedIds);
+    setDeleting(false);
+
+    if (res?.error) {
+      alert(res.error);
+    } else {
+      setSelectedIds([]);
+      setSuccessMsg("Ativos excluídos com sucesso!");
+      router.refresh();
+      setTimeout(() => setSuccessMsg(null), 3000);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {successMsg && (
+        <div className="mb-4 rounded-lg bg-green-50 px-3 py-2.5 text-sm font-semibold text-green-700 dark:bg-green-950/20 dark:text-green-300 transition duration-150">
+          {successMsg}
+        </div>
+      )}
+      {/* Barra de ações em lote */}
+      {selectedIds.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950/20 dark:text-red-300">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{selectedIds.length}</span> ativos selecionados
+          </div>
+          {canDelete && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={deleting}
+              className="btn-danger px-3 py-1.5 text-xs font-semibold"
+            >
+              {deleting ? "Excluindo..." : "🗑️ Excluir Selecionados"}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="card overflow-x-auto">
+        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/50">
+            <tr>
+              <th className="w-10 px-4 py-3 text-left">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(e) => handleSelectAll(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                />
+              </th>
+              <th className="table-th">Ativo</th>
+              <th className="table-th">Categoria</th>
+              <th className="table-th">Patrimônio</th>
+              <th className="table-th">Nº Série</th>
+              <th className="table-th">Responsável</th>
+              <th className="table-th">Localização</th>
+              <th className="table-th">Status</th>
+              <th className="table-th">NF</th>
+              <th className="table-th text-right">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {rows.map((a) => {
+              const isSelected = selectedIds.includes(a.id);
+              const missingFields = getMissingFields(a);
+              return (
+                <tr
+                  key={a.id}
+                  className={`hover:bg-slate-50 dark:hover:bg-slate-800/40 ${
+                    isSelected ? "bg-brand-50/30 dark:bg-brand-950/10" : ""
+                  }`}
+                >
+                  <td className="px-4 py-3 text-left">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => handleSelectOne(a.id, e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                    />
+                  </td>
+                  <td className="table-td">
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/ativos/${a.id}`}
+                        prefetch={false}
+                        className="font-medium text-brand-600 hover:underline"
+                      >
+                        {a.category_icon} {a.name}
+                      </Link>
+                      {missingFields.length > 0 && (
+                        <span
+                          className="text-amber-500 cursor-help"
+                          title={`Faltam informações deste ativo: ${missingFields.join(", ")}`}
+                        >
+                          ⚠️
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {a.brand} {a.model}
+                    </div>
+                  </td>
+                  <td className="table-td">{a.category_name}</td>
+                  <td className="table-td">{a.asset_tag || "—"}</td>
+                  <td className="table-td">{a.serial_number || "—"}</td>
+                  <td className="table-td">
+                    {a.employee_name || (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="table-td">{a.location_name || "—"}</td>
+                  <td className="table-td">
+                    <AssetStatusBadge status={a.status} />
+                  </td>
+                  <td className="table-td">
+                    {a.nf_doc_id ? (
+                      <a
+                        href={`/api/documents/${a.nf_doc_id}`}
+                        className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+                        title="Baixar Nota Fiscal"
+                      >
+                        📄 NF
+                      </a>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
+                  <td className="table-td text-right">
+                    <div className="flex justify-end gap-1">
+                      {canEdit && (
+                        <MovementModal
+                          assetId={a.id}
+                          employees={employees}
+                          locations={locations}
+                          departments={departments}
+                          trigger="Movimentar"
+                          triggerClass="btn-ghost px-2 py-1 text-xs"
+                        />
+                      )}
+                      <Link
+                        href={`/ativos/${a.id}`}
+                        prefetch={false}
+                        className="btn-ghost px-2 py-1 text-xs"
+                      >
+                        Ver
+                      </Link>
+                      {canDelete && (
+                        <ConfirmButton
+                          action={async () => {
+                            await deleteAssetById(a.id);
+                            setSelectedIds((prev) =>
+                              prev.filter((id) => id !== a.id)
+                            );
+                            setSuccessMsg(`Ativo "${a.name}" excluído com sucesso!`);
+                            router.refresh();
+                            setTimeout(() => setSuccessMsg(null), 3000);
+                          }}
+                          className="btn-ghost px-2 py-1 text-xs text-red-600"
+                          message={`Deseja excluir "${a.name}"? O ativo sai da lista, mas o histórico é preservado.`}
+                        >
+                          Excluir
+                        </ConfirmButton>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

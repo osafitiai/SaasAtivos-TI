@@ -88,24 +88,101 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
   const costRatio = acqValue > 0 ? (maintTotal / acqValue) * 100 : 0;
   const tech = (asset.technical_data ?? {}) as Record<string, string>;
 
+  const invoiceDocs = docs.filter((d) => d.document_type === "nota_fiscal");
+
+  const catLower = (asset.category_name || "").toLowerCase();
+  const isNotebook = catLower.includes("notebook");
+  const isMonitor = catLower.includes("monitor");
+  const isKit = catLower.includes("kit teclado");
+  const isHeadset = catLower.includes("headset");
+
   const resumo = (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       <div className="card p-5 lg:col-span-2">
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
           <Info label="Nome" value={asset.name} />
           <Info label="Categoria" value={`${asset.category_icon ?? ""} ${asset.category_name ?? ""}`} />
-          <Info label="Patrimônio" value={asset.asset_tag} />
-          <Info label="Número de série" value={asset.serial_number} />
-          <Info label="Código interno" value={asset.internal_code} />
-          <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
-          <Info label="Fabricante" value={asset.manufacturer} />
-          <Info label="Cor" value={asset.color} />
+
+          {isNotebook && (
+            <>
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Ano do produto" value={tech.ano_produto} />
+            </>
+          )}
+
+          {isMonitor && (
+            <>
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Tamanho (polegadas)" value={tech.tamanho_polegadas} />
+            </>
+          )}
+
+          {isKit && (
+            <>
+              <Info label="Número de série do teclado" value={tech.numero_serie_teclado} />
+              <Info label="Número de série do mouse" value={tech.numero_serie_mouse} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+            </>
+          )}
+
+          {isHeadset && (
+            <>
+              <Info label="Número de série do headset" value={tech.numero_serie_headset} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+              <Info label="Patrimônio" value={asset.asset_tag} />
+            </>
+          )}
+
+          {!isNotebook && !isMonitor && !isKit && !isHeadset && (
+            <>
+              <Info label="Patrimônio" value={asset.asset_tag} />
+              <Info label="Número de série" value={asset.serial_number} />
+              <Info label="Marca / Modelo" value={[asset.brand, asset.model].filter(Boolean).join(" ") || "—"} />
+            </>
+          )}
+
           <Info label="Condição física" value={asset.physical_condition} />
           <Info label="Status" value={<AssetStatusBadge status={asset.status} />} />
           <Info label="Descrição" value={asset.description} span />
         </dl>
+
+        {invoiceDocs.length > 0 && (
+          <div className="mt-6 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Notas Fiscais de Compra</h3>
+            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+              {invoiceDocs.map((d) => (
+                <li key={d.id} className="flex items-center justify-between py-2 text-sm">
+                  <span className="text-slate-600 dark:text-slate-300">📎 {d.file_name}</span>
+                  <a
+                    href={`/api/documents/${d.id}`}
+                    download
+                    className="btn-ghost px-2 py-1 text-xs font-semibold text-brand-600"
+                  >
+                    ⬇ Baixar NF
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
       <div className="space-y-4">
+        <div className="card p-5">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Aquisição</h3>
+          <dl className="space-y-2 text-sm">
+            <Info label="Fornecedor" value={asset.supplier_name} />
+            <Info label="Data de aquisição" value={formatDate(asset.acquisition_date)} />
+            <Info label="Nº da nota fiscal" value={asset.invoice_number} />
+            <Info label="Chave da NF-e" value={asset.invoice_key} />
+            <Info label="Data da nota fiscal" value={formatDate(asset.invoice_date)} />
+            <Info label="Ordem de compra" value={asset.purchase_order} />
+          </dl>
+        </div>
         <div className="card p-5">
           <h3 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">Vida útil</h3>
           <dl className="space-y-2 text-sm">
@@ -250,6 +327,45 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
     </div>
   );
 
+  const previousCollaborators = movements.filter((m) => m.to_employee_id);
+
+  const colaboradoresAnterioresTab = (
+    <div className="card overflow-x-auto">
+      {previousCollaborators.length === 0 ? (
+        <p className="p-5 text-sm text-slate-400">Nenhum colaborador anterior registrado.</p>
+      ) : (
+        <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+          <thead className="bg-slate-50 dark:bg-slate-800/50">
+            <tr>
+              <th className="table-th">Colaborador</th>
+              <th className="table-th">Data de Associação</th>
+              <th className="table-th">Tipo</th>
+              <th className="table-th">Motivo</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+            {previousCollaborators.map((m) => (
+              <tr key={m.id}>
+                <td className="table-td font-medium text-slate-900 dark:text-slate-100">
+                  {m.to_employee_name}
+                </td>
+                <td className="table-td text-slate-500">
+                  {formatDateTime(m.occurred_at)}
+                </td>
+                <td className="table-td text-slate-500">
+                  {m.movement_type}
+                </td>
+                <td className="table-td text-slate-500">
+                  {m.reason || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
   const auditoriaTab = (
     <div className="card overflow-hidden">
       {audit.length === 0 ? (
@@ -292,6 +408,7 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
           { label: "Resumo", content: resumo },
           { label: "Dados técnicos", content: dadosTecnicos },
           { label: "Responsável e localização", content: responsavel },
+          { label: "Colaboradores anteriores", content: colaboradoresAnterioresTab },
           { label: `Movimentações (${movements.length})`, content: movimentacoesTab },
           { label: `Manutenções (${maintenances.length})`, content: manutencoesTab },
           {
