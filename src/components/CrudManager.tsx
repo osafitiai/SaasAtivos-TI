@@ -66,6 +66,8 @@ export function CrudManager({
   deleteAction,
   addLabel = "Novo",
   canEdit = true,
+  searchPlaceholder,
+  showSearch = true,
 }: {
   title: string;
   fields: FieldSpec[];
@@ -75,6 +77,8 @@ export function CrudManager({
   deleteAction?: (formData: FormData) => Promise<ActionResult>;
   addLabel?: string;
   canEdit?: boolean;
+  searchPlaceholder?: string;
+  showSearch?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -82,6 +86,17 @@ export function CrudManager({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredRows = rows.filter((row) => {
+    if (!searchQuery.trim()) return true;
+    const term = searchQuery.toLowerCase().trim();
+    return columns.some((col) => {
+      const val = row[col.key];
+      if (val === null || val === undefined) return false;
+      return String(val).toLowerCase().includes(term);
+    });
+  });
 
   function openNew() {
     setEditing(null);
@@ -194,13 +209,55 @@ export function CrudManager({
         </div>
       )}
 
-      {canEdit && (
-        <div className="mb-4 flex justify-end">
-          <button className="btn-primary" onClick={openNew}>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {showSearch ? (
+          <div className="flex flex-1 items-center gap-2 max-w-md">
+            <div className="relative flex-1">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                <svg className="h-4 w-4 fill-current" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={searchPlaceholder || `Pesquisar ${title}...`}
+                className="input pl-9 pr-8 w-full text-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  title="Limpar busca"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <button
+              type="button"
+              className="btn-secondary px-3 py-2 text-sm font-medium shrink-0"
+              onClick={() => {}}
+            >
+              Pesquisar
+            </button>
+          </div>
+        ) : (
+          <div />
+        )}
+
+        {canEdit && (
+          <button className="btn-primary shrink-0" onClick={openNew}>
             + {addLabel}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="card overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
@@ -215,14 +272,26 @@ export function CrudManager({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {rows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length + 1} className="px-4 py-10 text-center text-sm text-slate-400">
-                  Nenhum registro cadastrado.
+                <td colSpan={columns.length + (canEdit ? 1 : 0)} className="px-4 py-10 text-center text-sm text-slate-400">
+                  {searchQuery ? (
+                    <span>
+                      Nenhum resultado encontrado para &quot;<span className="font-semibold text-slate-600 dark:text-slate-200">{searchQuery}</span>&quot;.{" "}
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        className="text-brand-600 hover:underline font-medium ml-1"
+                      >
+                        Limpar pesquisa
+                      </button>
+                    </span>
+                  ) : (
+                    "Nenhum registro cadastrado."
+                  )}
                 </td>
               </tr>
             ) : (
-              rows.map((row) => (
+              filteredRows.map((row) => (
                 <tr key={String(row.id)} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                   {columns.map((c) => (
                     <td key={c.key} className="table-td">

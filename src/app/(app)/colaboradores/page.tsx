@@ -95,6 +95,7 @@ export default async function ColaboradoresPage() {
       <CrudManager
         title="colaborador"
         addLabel="Novo colaborador"
+        searchPlaceholder="Pesquisar colaborador por nome, e-mail, departamento..."
         fields={fields}
         rows={rows}
         columns={columns}
