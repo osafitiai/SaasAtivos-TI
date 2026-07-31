@@ -221,19 +221,29 @@ export async function POST(request: Request) {
           }
         }
 
+        const dept = pick(row, ["Departamento", "Setor"]);
         const catId = await ensureCat(category);
         const locId = await ensureLoc(loc);
         const empId = await findEmp(respName);
+        let deptId = await ensureDept(dept);
+        if (!deptId && empId) {
+          const empRes = await client.query<{ department_id: string }>(
+            "select department_id from employees where id=$1",
+            [empId]
+          );
+          deptId = empRes.rows[0]?.department_id ?? null;
+        }
+
         const replDate = computeReplacementDate(acqDate, usefulLife);
         const mappedStatus = norm(status) === "ativo" ? (empId ? "Em uso" : "Disponível") : status;
 
         await client.query(
-          `insert into assets (tenant_id, category_id, name, serial_number, brand, model, location_id,
+          `insert into assets (tenant_id, category_id, name, serial_number, brand, model, location_id, department_id,
              current_employee_id, acquisition_date, acquisition_value, useful_life_years, replacement_date,
              replacement_status, status)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
           [
-            t, catId, name, serial, brand, model, locId, empId, acqDate, acqValue, usefulLife,
+            t, catId, name, serial, brand, model, locId, deptId, empId, acqDate, acqValue, usefulLife,
             replDate ? replDate.toISOString().slice(0, 10) : null,
             classifyReplacement(replDate), mappedStatus,
           ]

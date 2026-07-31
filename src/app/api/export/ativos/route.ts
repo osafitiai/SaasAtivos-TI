@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const rows = await query<Record<string, unknown>>(
     `select a.name, c.name as categoria, a.asset_tag as patrimonio, a.serial_number as serie,
             a.brand as marca, a.model as modelo, e.full_name as responsavel,
-            l.name as localizacao, d.name as departamento, a.status,
+            l.name as localizacao, coalesce(d.name, ed.name) as departamento, a.status,
             a.acquisition_date, a.acquisition_value, a.useful_life_years, a.replacement_date,
             a.physical_condition
        from assets a
@@ -42,6 +42,7 @@ export async function GET(request: Request) {
        left join employees e on e.id = a.current_employee_id
        left join locations l on l.id = a.location_id
        left join departments d on d.id = a.department_id
+       left join departments ed on ed.id = e.department_id
       where ${where.join(" and ")}
       order by a.name`,
     params

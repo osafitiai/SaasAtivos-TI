@@ -31,9 +31,12 @@ const REPORTS: Record<string, ReportDef> = {
   },
   ativos_por_departamento: {
     title: "Ativos por Departamento",
-    sql: `select coalesce(d.name,'Sem departamento') as "Departamento", count(*) as "Qtd Ativos", coalesce(sum(a.acquisition_value),0) as "Valor Total"
-            from assets a left join departments d on d.id=a.department_id
-           where a.tenant_id=$1 and a.deleted_at is null group by d.name order by 2 desc`,
+    sql: `select coalesce(d.name, ed.name, 'Sem departamento') as "Departamento", count(*) as "Qtd Ativos", coalesce(sum(a.acquisition_value),0) as "Valor Total"
+            from assets a
+            left join departments d on d.id=a.department_id
+            left join employees e on e.id=a.current_employee_id
+            left join departments ed on ed.id=e.department_id
+           where a.tenant_id=$1 and a.deleted_at is null group by coalesce(d.name, ed.name, 'Sem departamento') order by 2 desc`,
     financial: true,
   },
   ativos_sem_responsavel: {

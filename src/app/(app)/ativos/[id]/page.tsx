@@ -24,13 +24,14 @@ export default async function AtivoDetail({ params }: { params: Promise<{ id: st
   const asset = await queryOne<Asset>(
     `select a.*, c.name as category_name, c.icon as category_icon, c.color as category_color,
             e.full_name as employee_name, l.name as location_name, l.full_path,
-            d.name as department_name, coalesce(co.trade_name,co.legal_name) as company_name,
+            coalesce(d.name, ed.name) as department_name, coalesce(co.trade_name,co.legal_name) as company_name,
             s.trade_name as supplier_name
        from assets a
        left join asset_categories c on c.id = a.category_id
        left join employees e on e.id = a.current_employee_id
        left join locations l on l.id = a.location_id
        left join departments d on d.id = a.department_id
+       left join departments ed on ed.id = e.department_id
        left join companies co on co.id = a.company_id
        left join suppliers s on s.id = a.supplier_id
       where a.id = $1 and a.tenant_id = $2 and a.deleted_at is null`,

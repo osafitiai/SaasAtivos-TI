@@ -65,6 +65,7 @@ export default async function AtivosPage({
     left join employees e on e.id = a.current_employee_id
     left join locations l on l.id = a.location_id
     left join departments d on d.id = a.department_id
+    left join departments ed on ed.id = e.department_id
     where ${whereSql}`;
 
   const totalRow = await queryOne<{ c: string }>(`select count(*)::int as c ${baseFrom}`, params);
@@ -73,7 +74,7 @@ export default async function AtivosPage({
 
   const rows = await query<Asset>(
     `select a.*, c.name as category_name, c.icon as category_icon,
-            e.full_name as employee_name, l.name as location_name, d.name as department_name
+            e.full_name as employee_name, l.name as location_name, coalesce(d.name, ed.name) as department_name
      ${baseFrom}
      order by a.created_at desc
      limit ${PAGE_SIZE} offset ${(page - 1) * PAGE_SIZE}`,

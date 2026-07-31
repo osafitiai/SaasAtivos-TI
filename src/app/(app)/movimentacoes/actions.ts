@@ -99,7 +99,14 @@ export async function createMovement(formData: FormData): Promise<{ error?: stri
       : asset.current_employee_id;
 
   const newLocationId = toLocationId ?? asset.location_id;
-  const newDepartmentId = toDepartmentId ?? asset.department_id;
+  let newDepartmentId = toDepartmentId ?? asset.department_id;
+  if (!newDepartmentId && newEmployeeId) {
+    const emp = await queryOne<{ department_id: string }>(
+      "select department_id from employees where id = $1 and tenant_id = $2",
+      [newEmployeeId, user.tenant_id]
+    );
+    if (emp?.department_id) newDepartmentId = emp.department_id;
+  }
 
   try {
     await transaction(async (client) => {

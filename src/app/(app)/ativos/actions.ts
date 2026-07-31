@@ -84,6 +84,15 @@ export async function saveAsset(formData: FormData): Promise<{ error?: string; i
     notes: str(formData.get("notes")),
   };
 
+  const currentEmp = str(formData.get("current_employee_id"));
+  if (!data.department_id && currentEmp) {
+    const emp = await queryOne<{ department_id: string }>(
+      "select department_id from employees where id = $1 and tenant_id = $2",
+      [currentEmp, user.tenant_id]
+    );
+    if (emp?.department_id) data.department_id = emp.department_id;
+  }
+
   try {
     if (id) {
       const before = await queryOne(
