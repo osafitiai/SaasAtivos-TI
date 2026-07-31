@@ -57,11 +57,12 @@ const fields: FieldSpec[] = [
 
 export default async function CategoriasPage() {
   const user = await requireSession();
-  const rows = await query(
+  const rawRows = await query(
     `select c.*, (select count(*) from assets a where a.category_id = c.id and a.deleted_at is null)::int as assets_count
        from asset_categories c where c.tenant_id = $1 order by c.name`,
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   return (
     <div>

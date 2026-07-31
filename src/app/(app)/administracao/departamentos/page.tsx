@@ -36,7 +36,7 @@ export default async function DepartamentosPage() {
     companyOptions(user.tenant_id),
     employeeOptions(user.tenant_id),
   ]);
-  const rows = await query(
+  const rawRows = await query(
     `select d.*, coalesce(c.trade_name,c.legal_name) as company_name, e.full_name as manager_name,
             (select count(*) from employees em where em.department_id = d.id)::int as employees_count
        from departments d
@@ -45,6 +45,7 @@ export default async function DepartamentosPage() {
       where d.tenant_id = $1 order by d.name`,
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   const fields: FieldSpec[] = [
     { name: "name", label: "Nome", type: "text", required: true },

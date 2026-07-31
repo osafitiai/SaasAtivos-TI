@@ -26,10 +26,11 @@ export default async function UsuariosPage() {
     );
   }
 
-  const rows = await query<UserRow>(
+  const rawRows = await query(
     "select * from users where tenant_id = $1 order by name",
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   const fields: FieldSpec[] = [
     { name: "name", label: "Nome", type: "text", required: true },

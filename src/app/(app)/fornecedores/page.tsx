@@ -55,10 +55,11 @@ const fields: FieldSpec[] = [
 
 export default async function FornecedoresPage() {
   const user = await requireSession();
-  const rows = await query(
+  const rawRows = await query(
     `select * from suppliers where tenant_id = $1 order by trade_name`,
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   return (
     <div>

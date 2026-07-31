@@ -45,7 +45,7 @@ export default async function LicencasPage() {
     supplierOptions(user.tenant_id),
   ]);
 
-  const rows = await query(
+  const rawRows = await query(
     `select l.*, coalesce(c.trade_name,c.legal_name) as company_name, s.trade_name as supplier_name
        from software_licenses l
        left join companies c on c.id = l.company_id
@@ -53,6 +53,7 @@ export default async function LicencasPage() {
       where l.tenant_id = $1 order by l.name`,
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   const fields: FieldSpec[] = [
     { name: "name", label: "Nome / Produto", type: "text", required: true, colSpan: 2 },

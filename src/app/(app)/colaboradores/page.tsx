@@ -46,7 +46,7 @@ export default async function ColaboradoresPage() {
     branchOptions(user.tenant_id),
   ]);
 
-  const rows = await query(
+  const rawRows = await query(
     `select e.*, d.name as department_name, coalesce(c.trade_name,c.legal_name) as company_name,
             (select count(*) from assets a where a.current_employee_id = e.id and a.deleted_at is null)::int as assets_count,
             (select coalesce(sum(a.acquisition_value),0) from assets a where a.current_employee_id = e.id and a.deleted_at is null) as assets_value
@@ -56,6 +56,7 @@ export default async function ColaboradoresPage() {
       where e.tenant_id = $1 order by e.full_name`,
     [user.tenant_id]
   );
+  const rows = JSON.parse(JSON.stringify(rawRows));
 
   const fields: FieldSpec[] = [
     { name: "full_name", label: "Nome completo", type: "text", required: true, colSpan: 2 },
