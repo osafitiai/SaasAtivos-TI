@@ -81,7 +81,9 @@ export default async function DashboardPage() {
        from asset_categories c
        left join assets a on a.category_id = c.id and a.deleted_at is null
       where c.tenant_id = $1
-      group by c.name order by value desc`,
+      group by c.name
+     having count(a.id) > 0
+      order by value desc`,
     [t]
   );
 
@@ -92,10 +94,13 @@ export default async function DashboardPage() {
   );
 
   const byDepartment = await query<{ name: string; value: number }>(
-    `select coalesce(d.name,'Sem departamento') as name, count(a.id)::int as value
-       from assets a left join departments d on d.id = a.department_id
+    `select coalesce(d.name, ed.name, 'Sem departamento') as name, count(a.id)::int as value
+       from assets a
+       left join departments d on d.id = a.department_id
+       left join employees e on e.id = a.current_employee_id
+       left join departments ed on ed.id = e.department_id
       where a.tenant_id = $1 and a.deleted_at is null
-      group by d.name order by value desc limit 10`,
+      group by coalesce(d.name, ed.name, 'Sem departamento') order by value desc limit 10`,
     [t]
   );
 
