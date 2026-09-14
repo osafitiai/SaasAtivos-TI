@@ -76,27 +76,32 @@ export async function getSession(): Promise<SessionUser | null> {
     return null;
   }
 
-  const user = await queryOne<DbUser>(
-    `select id, tenant_id, name, email, role, scope_type, scope_ids,
-            employee_id, is_platform_admin, status, session_version
-       from users where id = $1`,
-    [payload.sub]
-  );
+  try {
+    const user = await queryOne<DbUser>(
+      `select id, tenant_id, name, email, role, scope_type, scope_ids,
+              employee_id, is_platform_admin, status, session_version
+         from users where id = $1`,
+      [payload.sub]
+    );
 
-  if (!user || user.status !== "active") return null;
-  if (user.session_version !== payload.sv) return null;
+    if (!user || user.status !== "active") return null;
+    if (user.session_version !== payload.sv) return null;
 
-  return {
-    id: user.id,
-    tenant_id: user.tenant_id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    scope_type: user.scope_type,
-    scope_ids: Array.isArray(user.scope_ids) ? user.scope_ids : [],
-    employee_id: user.employee_id,
-    is_platform_admin: user.is_platform_admin,
-  };
+    return {
+      id: user.id,
+      tenant_id: user.tenant_id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      scope_type: user.scope_type,
+      scope_ids: Array.isArray(user.scope_ids) ? user.scope_ids : [],
+      employee_id: user.employee_id,
+      is_platform_admin: user.is_platform_admin,
+    };
+  } catch (err) {
+    console.error("[getSession] Erro ao buscar usuário da sessão no banco:", err);
+    return null;
+  }
 }
 
 /** Garante sessão em Server Components; redireciona para login se ausente. */

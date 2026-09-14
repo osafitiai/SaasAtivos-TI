@@ -20,25 +20,33 @@ export async function loginAction(
     return { error: "Informe e-mail e senha." };
   }
 
-  const user = await queryOne<{
-    id: string;
-    password_hash: string;
-    status: string;
-    session_version: number;
-  }>(
-    `select id, password_hash, status, session_version
-       from users where lower(email) = $1 order by created_at limit 1`,
-    [email]
-  );
+  try {
+    const user = await queryOne<{
+      id: string;
+      password_hash: string;
+      status: string;
+      session_version: number;
+    }>(
+      `select id, password_hash, status, session_version
+         from users where lower(email) = $1 order by created_at limit 1`,
+      [email]
+    );
 
-  if (!user || !(await verifyPassword(password, user.password_hash))) {
-    return { error: "Credenciais inválidas." };
-  }
-  if (user.status !== "active") {
-    return { error: "Usuário bloqueado. Contate o administrador." };
+    if (!user || !(await verifyPassword(password, user.password_hash))) {
+      return { error: "Credenciais inválidas." };
+    }
+    if (user.status !== "active") {
+      return { error: "Usuário bloqueado. Contate o administrador." };
+    }
+
+    await pool.query("update users set last_login_at = now() where id = $1", [user.id]);
+    await createSession(user.id, user.session_version);
+  } catch (err: unknown) {
+    console.error("[loginAction] Erro no banco de dados:", err);
+    return {
+      error: "Erro de conexão com o banco de dados. Verifique a variável DATABASE_URL ou a conexão do servidor.",
+    };
   }
 
-  await pool.query("update users set last_login_at = now() where id = $1", [user.id]);
-  await createSession(user.id, user.session_version);
   redirect("/dashboard");
 }
